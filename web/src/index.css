@@ -1,0 +1,395 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import url("https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap");
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+:root {
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* ========================================
+   QUEST FORGE - VISUAL NOVEL THEME
+   ======================================== */
+
+.font-pixel {
+  font-family: "Press Start 2P", monospace;
+}
+
+/* ========================================
+   DIALOGUE BOX
+   ======================================== */
+.dialogue-box {
+  background: linear-gradient(to bottom, rgba(10, 10, 30, 0.95), rgba(20, 15, 40, 0.97));
+  border: 3px solid #c4a747;
+  border-radius: 8px;
+  box-shadow:
+    inset 0 0 0 2px #1a1a2e,
+    inset 0 0 0 4px #c4a747,
+    0 8px 32px rgba(0, 0, 0, 0.5);
+  position: relative;
+}
+
+.dialogue-box::before {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border: 2px solid rgba(196, 167, 71, 0.3);
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+/* ========================================
+   TYPEWRITER CURSOR
+   ======================================== */
+@keyframes cursor-blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+.cursor-blink {
+  animation: cursor-blink 0.8s steps(1) infinite;
+}
+
+/* ========================================
+   SCENE TRANSITIONS
+   ======================================== */
+@keyframes scene-fade-in {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+.scene-fade-in {
+  animation: scene-fade-in 0.8s ease-out forwards;
+}
+
+@keyframes dialogue-slide-up {
+  0% { opacity: 0; transform: translateY(20px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.dialogue-slide-up {
+  animation: dialogue-slide-up 0.5s ease-out forwards;
+}
+
+@keyframes screen-fade-in {
+  0% { opacity: 0; transform: scale(1.02); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.screen-enter {
+  animation: screen-fade-in 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* ========================================
+   VISUAL NOVEL: BACKGROUND
+   ======================================== */
+.vn-background {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.vn-background::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    transparent 40%,
+    rgba(0, 0, 0, 0.3) 60%,
+    rgba(0, 0, 0, 0.7) 80%,
+    rgba(0, 0, 0, 0.85) 100%
+  );
+}
+
+/* ========================================
+   VISUAL NOVEL: CHARACTER PORTRAIT
+   ======================================== */
+.vn-portrait {
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.5));
+  transition: opacity 0.3s ease;
+}
+
+/* ========================================
+   VISUAL NOVEL: CHOICE BUTTONS
+   ======================================== */
+.vn-choice-btn {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, rgba(30, 20, 50, 0.9), rgba(50, 30, 80, 0.9));
+  border: 2px solid rgba(196, 167, 71, 0.5);
+  border-radius: 8px;
+  padding: 12px 24px;
+  color: #f0e6d0;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.vn-choice-btn::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent);
+  transform: translateX(-100%);
+  transition: transform 0.5s ease;
+}
+
+.vn-choice-btn:hover {
+  border-color: #c4a747;
+  transform: translateY(-2px);
+  box-shadow: 0 0 20px rgba(196, 167, 71, 0.3);
+}
+
+.vn-choice-btn:hover::before {
+  transform: translateX(100%);
+}
+
+.vn-choice-btn:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* ========================================
+   ACHIEVEMENT TOAST
+   ======================================== */
+@keyframes achievement-slide-in {
+  0% { opacity: 0; transform: translateY(-100%) scale(0.9); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes achievement-slide-out {
+  0% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-100%) scale(0.9); }
+}
+
+.achievement-toast {
+  animation: achievement-slide-in 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  box-shadow: 0 0 30px rgba(196, 167, 71, 0.4), 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.achievement-toast.hiding {
+  animation: achievement-slide-out 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* ========================================
+   CONTINUE INDICATOR
+   ======================================== */
+@keyframes bounce-indicator {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(4px); }
+}
+
+.bounce-indicator {
+  animation: bounce-indicator 1s ease-in-out infinite;
+}
+
+/* ========================================
+   TITLE SCREEN: TITLE GLOW
+   ======================================== */
+@keyframes title-glow-pulse {
+  0%, 100% {
+    text-shadow:
+      0 0 10px rgba(196, 167, 71, 0.3),
+      0 0 20px rgba(196, 167, 71, 0.2);
+  }
+  50% {
+    text-shadow:
+      0 0 20px rgba(196, 167, 71, 0.5),
+      0 0 40px rgba(196, 167, 71, 0.3),
+      0 0 60px rgba(196, 167, 71, 0.1);
+  }
+}
+
+.title-glow {
+  animation: title-glow-pulse 3s ease-in-out infinite;
+}
+
+/* ========================================
+   TITLE SCREEN: BUTTON PULSE
+   ======================================== */
+@keyframes button-pulse {
+  0%, 100% {
+    box-shadow:
+      0 0 15px rgba(196, 167, 71, 0.3),
+      0 0 30px rgba(196, 167, 71, 0.15);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow:
+      0 0 25px rgba(196, 167, 71, 0.5),
+      0 0 50px rgba(196, 167, 71, 0.25);
+    transform: scale(1.02);
+  }
+}
+
+.button-pulse {
+  animation: button-pulse 2.5s ease-in-out infinite;
+}
+
+/* ========================================
+   CARD STAGGER ENTRANCE
+   ======================================== */
+@keyframes card-stagger-in {
+  0% {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.card-stagger-in {
+  animation: card-stagger-in 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  opacity: 0;
+}
+
+/* ========================================
+   INTRO SCREEN: BACKGROUND REVEAL
+   ======================================== */
+@keyframes intro-bg-reveal {
+  0% { opacity: 0.05; }
+  100% { opacity: 0.4; }
+}
+
+.intro-bg-reveal {
+  animation: intro-bg-reveal 4s ease-out forwards;
+}
+
+/* ========================================
+   LOADING ANIMATION
+   ======================================== */
+@keyframes loading-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+.loading-pulse {
+  animation: loading-pulse 2s ease-in-out infinite;
+}
+
+/* ========================================
+   REDUCED MOTION
+   ======================================== */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
