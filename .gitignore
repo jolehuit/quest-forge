@@ -52,6 +52,7 @@ develop-eggs/
 eggs/
 .eggs/
 lib/
+!server/src/lib/
 lib64/
 parts/
 sdist/
