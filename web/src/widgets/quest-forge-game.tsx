@@ -378,19 +378,19 @@ function GameScreen({
       <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-black/60" />
 
       {/* ═══════════════════════════════════════
-          TOP: NARRATION PANEL
+          TOP: NARRATION PANEL (Compact)
          ═══════════════════════════════════════ */}
-      <div className="absolute top-0 left-0 right-0 z-20 p-4">
+      <div className="absolute top-0 left-0 right-0 z-20 p-3">
         <div className="narration-panel max-w-3xl mx-auto">
-          <div className="bg-black/70 backdrop-blur-sm border border-[#c4a747]/30 rounded-lg p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-[#c4a747] text-xs uppercase tracking-wider font-bold">
+          <div className="bg-black/70 backdrop-blur-sm border border-[#c4a747]/30 rounded-lg p-3">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-[#c4a747] text-[10px] uppercase tracking-wider font-bold">
                 Scène {scene.sequenceNumber}
               </span>
-              <span className="text-[#8a8a9a] text-xs">•</span>
-              <span className="text-[#8a8a9a] text-xs italic">{scene.narration.mood}</span>
+              <span className="text-[#8a8a9a] text-[10px]">•</span>
+              <span className="text-[#8a8a9a] text-[10px] italic">{scene.narration.mood}</span>
             </div>
-            <p className="text-[#f0e6d0] text-sm md:text-base leading-relaxed">
+            <p className="text-[#f0e6d0] text-xs md:text-sm leading-relaxed line-clamp-4">
               {scene.narration.text}
             </p>
           </div>
@@ -398,31 +398,31 @@ function GameScreen({
       </div>
 
       {/* ═══════════════════════════════════════
-          MIDDLE: CHARACTER PORTRAITS
+          MIDDLE: CHARACTER PORTRAITS (Compact)
          ═══════════════════════════════════════ */}
-      <div className="absolute inset-0 flex items-end justify-between px-4 pb-48 pointer-events-none">
+      <div className="absolute inset-0 flex items-end justify-between px-4 pb-32 pointer-events-none">
         {/* Player Character - Left */}
         <div className="character-portrait-left pointer-events-auto">
           <div className="relative">
-            <div className="w-32 h-40 md:w-40 md:h-52 rounded-t-lg overflow-hidden border-2 border-[#c4a747]/40 shadow-2xl bg-black/50">
+            <div className="w-24 h-32 md:w-28 md:h-36 rounded-t-lg overflow-hidden border-2 border-[#c4a747]/40 shadow-2xl bg-black/50">
               <img
                 src={playerChar.portraitUrl}
                 alt={playerChar.name}
                 className="w-full h-full object-cover object-top"
               />
             </div>
-            <div className="absolute -bottom-6 left-0 right-0 text-center">
-              <span className="text-[#c4a747] text-xs font-bold uppercase tracking-wider bg-black/70 px-2 py-1 rounded">
+            <div className="absolute -bottom-5 left-0 right-0 text-center">
+              <span className="text-[#c4a747] text-[10px] font-bold uppercase tracking-wider bg-black/70 px-2 py-0.5 rounded">
                 {playerChar.name}
               </span>
             </div>
             {/* Active indicator */}
-            <div className="absolute -top-2 -right-2 w-4 h-4 bg-[#c4a747] rounded-full animate-pulse" />
+            <div className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-[#c4a747] rounded-full animate-pulse" />
           </div>
         </div>
 
         {/* NPCs - Right */}
-        <div className="flex gap-4 pointer-events-auto">
+        <div className="flex gap-3 pointer-events-auto">
           {npcs.map((npc) => {
             const char = getCharacter(npc.characterId);
             if (!char) return null;
@@ -430,7 +430,7 @@ function GameScreen({
               <div key={npc.characterId} className="character-portrait-right">
                 <div className="relative">
                   <div
-                    className={`w-32 h-40 md:w-40 md:h-52 rounded-t-lg overflow-hidden border-2 shadow-2xl bg-black/50 transition-all duration-300 ${
+                    className={`w-24 h-32 md:w-28 md:h-36 rounded-t-lg overflow-hidden border-2 shadow-2xl bg-black/50 transition-all duration-300 ${
                       npc.isSpeaking
                         ? "border-[#c4a747] shadow-[#c4a747]/30"
                         : "border-[#8a8a9a]/40"
@@ -442,9 +442,9 @@ function GameScreen({
                       className="w-full h-full object-cover object-top"
                     />
                   </div>
-                  <div className="absolute -bottom-6 left-0 right-0 text-center">
+                  <div className="absolute -bottom-5 left-0 right-0 text-center">
                     <span
-                      className={`text-xs font-bold uppercase tracking-wider bg-black/70 px-2 py-1 rounded ${
+                      className={`text-[10px] font-bold uppercase tracking-wider bg-black/70 px-2 py-0.5 rounded ${
                         npc.isSpeaking ? "text-[#c4a747]" : "text-[#8a8a9a]"
                       }`}
                     >
@@ -452,7 +452,7 @@ function GameScreen({
                     </span>
                   </div>
                   {npc.isSpeaking && (
-                    <div className="absolute -top-2 -left-2 w-4 h-4 bg-[#c4a747] rounded-full animate-pulse" />
+                    <div className="absolute -top-1.5 -left-1.5 w-3 h-3 bg-[#c4a747] rounded-full animate-pulse" />
                   )}
                 </div>
               </div>
@@ -462,35 +462,35 @@ function GameScreen({
       </div>
 
       {/* ═══════════════════════════════════════
-          BOTTOM: EXIT CHOICES
+          BOTTOM: EXIT CHOICES (Compact)
          ═══════════════════════════════════════ */}
-      <div className="absolute bottom-0 left-0 right-0 z-30 p-4">
+      <div className="absolute bottom-0 left-0 right-0 z-30 p-2">
         <div className="max-w-3xl mx-auto">
           {gameState.isGeneratingScene ? (
-            <div className="bg-black/80 backdrop-blur-sm border border-[#c4a747]/30 rounded-lg p-4 text-center">
-              <div className="text-[#c4a747] animate-pulse">
+            <div className="bg-black/80 backdrop-blur-sm border border-[#c4a747]/30 rounded-lg p-2 text-center">
+              <div className="text-[#c4a747] animate-pulse text-xs">
                 Génération de la prochaine scène...
               </div>
             </div>
           ) : scene.isEnding ? (
             <button
               onClick={() => {/* Transition to end screen */}}
-              className="w-full py-4 bg-gradient-to-r from-[#c4a747]/30 to-[#c4a747]/10 border-2 border-[#c4a747] rounded-lg text-[#f0e6d0] font-bold uppercase tracking-wider hover:bg-[#c4a747]/40 transition-all"
+              className="w-full py-3 bg-gradient-to-r from-[#c4a747]/30 to-[#c4a747]/10 border-2 border-[#c4a747] rounded-lg text-[#f0e6d0] font-bold uppercase tracking-wider hover:bg-[#c4a747]/40 transition-all text-sm"
             >
               🏆 Terminer l&apos;Histoire
             </button>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               {scene.exits.map((exit, idx) => (
                 <button
                   key={exit.id}
                   onClick={() => onExitChoice(exit)}
-                  className="exit-choice-btn group relative overflow-hidden bg-black/70 backdrop-blur-sm border border-[#c4a747]/40 hover:border-[#c4a747] rounded-lg p-4 text-left transition-all duration-300 hover:bg-[#c4a747]/10"
+                  className="exit-choice-btn group relative overflow-hidden bg-black/70 backdrop-blur-sm border border-[#c4a747]/40 hover:border-[#c4a747] rounded-lg p-2.5 text-left transition-all duration-300 hover:bg-[#c4a747]/10"
                   style={{ animationDelay: `${idx * 100}ms` }}
                 >
-                  <div className="flex items-center gap-3">
-                    <span className="text-2xl">{exit.icon || ["🔥", "🤔", "⚔️"][idx % 3]}</span>
-                    <span className="text-[#f0e6d0] font-medium">{exit.description}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">{exit.icon || ["🔥", "🤔", "⚔️"][idx % 3]}</span>
+                    <span className="text-[#f0e6d0] text-sm font-medium">{exit.description}</span>
                   </div>
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#c4a747]/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
                 </button>
@@ -500,24 +500,24 @@ function GameScreen({
         </div>
       </div>
 
-      {/* Scene Info Bar */}
-      <div className="absolute top-4 right-4 z-20 flex items-center gap-4">
-        <div className="bg-black/60 backdrop-blur-sm rounded-full px-3 py-1 flex items-center gap-2">
-          <span className="text-[#c4a747] text-xs">Confiance:</span>
+      {/* Scene Info Bar - Compact */}
+      <div className="absolute top-3 right-3 z-20 flex items-center gap-2">
+        <div className="bg-black/60 backdrop-blur-sm rounded-full px-2 py-0.5 flex items-center gap-1.5">
+          <span className="text-[#c4a747] text-[10px]">Confiance:</span>
           <div className="flex gap-0.5">
             {Array.from({ length: 10 }).map((_, i) => (
               <div
                 key={i}
-                className={`w-1.5 h-3 rounded-sm ${
+                className={`w-1 h-2 rounded-sm ${
                   i < gameState.trustLevel ? "bg-[#c4a747]" : "bg-[#8a8a9a]/30"
                 }`}
               />
             ))}
           </div>
         </div>
-        <div className="bg-black/60 backdrop-blur-sm rounded-full px-3 py-1">
-          <span className="text-[#8a8a9a] text-xs">
-            Scène {gameState.sceneCount}/10
+        <div className="bg-black/60 backdrop-blur-sm rounded-full px-2 py-0.5">
+          <span className="text-[#8a8a9a] text-[10px]">
+            {gameState.sceneCount}/10
           </span>
         </div>
       </div>
