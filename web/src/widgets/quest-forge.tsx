@@ -27,6 +27,13 @@ const DIFFICULTY_COLORS: Record<string, string> = {
   hidden: "border-purple-500/50",
 };
 
+interface AchievementTrigger {
+  intent: string;
+  validExamples: string[];
+  antiPatterns: string[];
+  evaluationInstruction: string;
+}
+
 interface SceneAchievement {
   id: string;
   name: string;
@@ -35,6 +42,7 @@ interface SceneAchievement {
   difficulty: string;
   required: boolean;
   choiceText: string;
+  trigger: AchievementTrigger;
 }
 
 interface ExitConditions {
@@ -226,25 +234,45 @@ function AchievementToast({ achievement, onDone }: { achievement: GlobalAchievem
 // SCENE INFO BAR
 // ═══════════════════════════════════════
 
-function SceneInfoBar({ scene }: { scene: GameScene }) {
+function SceneInfoBar({ scene, achievementCount, totalAchievements }: { scene: GameScene; achievementCount: number; totalAchievements: number }) {
   return (
     <div className="absolute top-0 left-0 right-0 z-20 p-3 flex items-center justify-between">
       <div className="bg-black/60 backdrop-blur-sm rounded-lg px-3 py-1.5 flex items-center gap-2">
         <span className="text-[#c4a747] text-xs font-bold uppercase tracking-wider">{scene.title}</span>
         <span className="text-[#8a8a9a] text-[10px]">{scene.act}</span>
       </div>
-      <div className="bg-black/60 backdrop-blur-sm rounded-lg px-3 py-1.5 flex items-center gap-2">
-        <span className="text-[10px] text-[#8a8a9a]">{scene.mood}</span>
-        {/* Tension indicator dots */}
-        <div className="flex gap-0.5">
-          {Array.from({ length: 10 }).map((_, i) => (
-            <div
-              key={i}
-              className={`w-1 h-1 rounded-full ${
-                i < scene.tensionLevel ? "bg-red-500/80" : "bg-white/10"
-              }`}
-            />
-          ))}
+      <div className="flex items-center gap-2">
+        {/* Achievement counter */}
+        <div className="bg-black/60 backdrop-blur-sm rounded-lg px-3 py-1.5 flex items-center gap-1.5">
+          <span className="text-[10px] text-[#c4a747]">{achievementCount}/{totalAchievements}</span>
+        </div>
+        <div className="bg-black/60 backdrop-blur-sm rounded-lg px-3 py-1.5 flex items-center gap-3">
+          {/* Trust indicator */}
+          <div className="flex items-center gap-1">
+            <span className="text-[10px] text-[#8a8a9a]">Trust</span>
+            <div className="flex gap-0.5">
+              {Array.from({ length: 10 }).map((_, i) => (
+                <div
+                  key={i}
+                  className={`w-1 h-1 rounded-full ${
+                    i < scene.trustLevel ? "bg-[#c4a747]/80" : "bg-white/10"
+                  }`}
+                />
+              ))}
+            </div>
+          </div>
+          <span className="text-[10px] text-[#8a8a9a]">{scene.mood}</span>
+          {/* Tension indicator dots */}
+          <div className="flex gap-0.5">
+            {Array.from({ length: 10 }).map((_, i) => (
+              <div
+                key={i}
+                className={`w-1 h-1 rounded-full ${
+                  i < scene.tensionLevel ? "bg-red-500/80" : "bg-white/10"
+                }`}
+              />
+            ))}
+          </div>
         </div>
       </div>
     </div>
@@ -259,7 +287,7 @@ function TitleScreen({ gameData, onStart }: { gameData: GameData; onStart: () =>
   const bgUrl = gameData.scenes[0]?.backgroundUrl;
 
   return (
-    <div className="relative h-screen w-full overflow-hidden flex flex-col items-center justify-center">
+    <div className="relative rounded-2xl min-h-[400px] sm:min-h-[450px] lg:min-h-[520px] w-full overflow-hidden flex flex-col items-center justify-center">
       {bgUrl && (
         <div
           className="absolute inset-0 bg-cover bg-center scale-110 blur-sm"
@@ -329,7 +357,7 @@ function IntroScreen({ gameData, onContinue }: { gameData: GameData; onContinue:
   }, [done, skip, isLastLine, onContinue]);
 
   return (
-    <div className="relative h-screen w-full overflow-hidden" onClick={handleClick}>
+    <div className="relative rounded-2xl min-h-[320px] sm:min-h-[380px] lg:min-h-[450px] w-full overflow-hidden" onClick={handleClick}>
       {bgUrl && (
         <div className="absolute inset-0 intro-bg-reveal">
           <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${bgUrl})` }} />
@@ -403,17 +431,9 @@ function GameScreen({
   const sendFollowUpMessage = useSendFollowUpMessage();
   const [toastAchievement, setToastAchievement] = useState<GlobalAchievement | null>(null);
   const [sceneKey, setSceneKey] = useState(0);
-  const [showOpening, setShowOpening] = useState(true);
-  const [messageText, setMessageText] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [hasGreetedScene, setHasGreetedScene] = useState(false);
 
   const scene = gameData.scenes.find((s) => s.id === gameState.currentSceneId) ?? null;
-
-  // Typewriter for opening line
-  const { displayed: openingDisplayed, done: openingDone, skip: skipOpening } = useTypewriter(
-    showOpening ? (scene?.openingLine ?? "") : "",
-    35,
-  );
 
   // Available choices: achievements not yet unlocked in this scene
   const availableChoices =
@@ -428,20 +448,23 @@ function GameScreen({
   // Exit conditions met?
   const exitMet = scene ? checkExitConditions(scene.exitConditions, gameState.unlockedAchievements) : false;
 
-  // Reset opening when scene changes
+  // Send opening greeting when entering a new scene (so LLM speaks in chat)
   useEffect(() => {
-    setShowOpening(true);
-  }, [sceneKey]);
+    if (!scene || hasGreetedScene) return;
+    setHasGreetedScene(true);
 
-  // Handle clicking the opening dialogue
-  const handleOpeningClick = useCallback(() => {
-    if (!openingDone) {
-      skipOpening();
-      return;
-    }
-    // After opening done, dismiss it to show choices
-    setShowOpening(false);
-  }, [openingDone, skipOpening]);
+    sendFollowUpMessage(
+      `[SCENE: ${scene.id} "${scene.title}"] ` +
+        `[Trust: ${scene.trustLevel}/10] ` +
+        `[Mood: ${scene.mood}] ` +
+        `The player has just entered this scene. Greet them in character with a short opening line.`,
+    );
+  }, [scene, hasGreetedScene, sendFollowUpMessage]);
+
+  // Reset greeting flag when scene changes
+  useEffect(() => {
+    setHasGreetedScene(false);
+  }, [sceneKey]);
 
   // Handle achievement choice
   const handleChoice = useCallback(
@@ -457,11 +480,11 @@ function GameScreen({
       const globalAch = gameData.allAchievements.find((a) => a.id === achievement.id);
       if (globalAch) setToastAchievement(globalAch);
 
-      // Send rich message to LLM
+      // Send message to LLM (no achievement details — hidden from model)
       sendFollowUpMessage(
         `[SCENE: ${scene.id} "${scene.title}"] ` +
-          `[Achievement: ${achievement.name} (${achievement.type})] ` +
           `[Trust: ${scene.trustLevel}/10] ` +
+          `[Mood: ${scene.mood}] ` +
           `Player chose: "${achievement.choiceText}"`,
       );
 
@@ -518,7 +541,6 @@ function GameScreen({
         transitionText: "",
       });
       setSceneKey((k) => k + 1);
-      setShowOpening(true);
 
       sendFollowUpMessage(
         `[SCENE: ${sceneId} "${nextScene.title}"] ` +
@@ -528,29 +550,6 @@ function GameScreen({
       );
     },
     [gameData, gameState, setGameState, sendFollowUpMessage, onEnd],
-  );
-
-  // Handle free text message
-  const handleSendMessage = useCallback(() => {
-    if (!messageText.trim() || !scene) return;
-
-    sendFollowUpMessage(
-      `[SCENE: ${scene.id} "${scene.title}"] ` +
-        `[Trust: ${scene.trustLevel}/10] ` +
-        `[Achievements: ${gameState.unlockedAchievements.join(", ") || "none"}] ` +
-        `Player says: "${messageText}"`,
-    );
-    setMessageText("");
-  }, [messageText, scene, gameState, sendFollowUpMessage]);
-
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        handleSendMessage();
-      }
-    },
-    [handleSendMessage],
   );
 
   if (!scene) return null;
@@ -571,7 +570,10 @@ function GameScreen({
   }
 
   return (
-    <div className="relative h-screen w-full overflow-hidden select-none">
+    <div
+      className="relative rounded-2xl min-h-[400px] sm:min-h-[460px] lg:min-h-[540px] w-full overflow-hidden select-none"
+      data-llm={`Scene: "${scene.title}" (${scene.act}) | Mood: ${scene.mood} | Trust: ${scene.trustLevel}/10 | Achievements: ${gameState.unlockedAchievements.join(", ") || "none"} | Available choices: ${availableChoices.map(c => c.choiceText).join(", ") || "none"}`}
+    >
       {/* Background */}
       <div
         key={`bg-${sceneKey}`}
@@ -580,11 +582,11 @@ function GameScreen({
       />
 
       {/* Scene info bar */}
-      <SceneInfoBar scene={scene} />
+      <SceneInfoBar scene={scene} achievementCount={gameState.unlockedAchievements.length} totalAchievements={gameData.allAchievements.length} />
 
       {/* Character portrait */}
       {gameData.persona.portraitUrl && (
-        <div className="absolute bottom-48 left-4 z-10 scene-fade-in">
+        <div className="absolute bottom-36 sm:bottom-40 left-4 z-10 scene-fade-in">
           <img
             src={gameData.persona.portraitUrl}
             alt={gameData.persona.name}
@@ -593,89 +595,49 @@ function GameScreen({
         </div>
       )}
 
-      {/* Opening dialogue */}
-      {showOpening && (
-        <DialogueBox
-          speaker={gameData.persona.name}
-          text={openingDisplayed}
-          isComplete={openingDone}
-          onAdvance={handleOpeningClick}
-          onSkip={skipOpening}
-          showContinue={openingDone}
-        />
-      )}
-
-      {/* Choices + chat input (after opening) */}
-      {!showOpening && (
-        <div className="absolute bottom-0 left-0 right-0 z-20 p-4">
-          <div className="mx-auto max-w-2xl space-y-3">
-            {/* Achievement choices */}
-            {availableChoices.length > 0 && (
-              <div className="space-y-2">
-                {availableChoices.map((ach, i) => (
-                  <button
-                    key={ach.id}
-                    className={`vn-choice-btn w-full text-left text-sm md:text-base flex items-center gap-3 ${DIFFICULTY_COLORS[ach.difficulty] || ""}`}
-                    style={{ animationDelay: `${i * 0.1}s` }}
-                    onClick={() => handleChoice(ach)}
-                  >
-                    <span className="text-lg shrink-0" title={ach.type}>
-                      {ACHIEVEMENT_TYPE_ICONS[ach.type] || "\u2B50"}
-                    </span>
-                    <span>{ach.choiceText}</span>
-                    {ach.difficulty === "hidden" && (
-                      <span className="ml-auto text-purple-400 text-[10px] uppercase">hidden</span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Continue button (when exit conditions met) */}
-            {exitMet && !isTerminal && (
+      {/* Choices overlay */}
+      <div className="absolute bottom-0 left-0 right-0 z-20 p-4">
+        <div className="mx-auto max-w-2xl space-y-2">
+          {/* Achievement choices */}
+          {availableChoices.length > 0 &&
+            availableChoices.map((ach, i) => (
               <button
-                onClick={handleContinue}
-                className="vn-choice-btn w-full text-center text-sm md:text-base border-[#c4a747] font-semibold"
+                key={ach.id}
+                className={`vn-choice-btn w-full text-left text-sm md:text-base flex items-center gap-3 ${DIFFICULTY_COLORS[ach.difficulty] || ""}`}
+                style={{ animationDelay: `${i * 0.1}s` }}
+                onClick={() => handleChoice(ach)}
               >
-                Continue {"\u2192"}
+                <span className="text-lg shrink-0" title={ach.type}>
+                  {ACHIEVEMENT_TYPE_ICONS[ach.type] || "\u2B50"}
+                </span>
+                <span>{ach.choiceText}</span>
+                {ach.difficulty === "hidden" && (
+                  <span className="ml-auto text-purple-400 text-[10px] uppercase">hidden</span>
+                )}
               </button>
-            )}
+            ))}
 
-            {/* End button for terminal scenes */}
-            {isTerminal && !showOpening && (
-              <button
-                onClick={onEnd}
-                className="vn-choice-btn w-full text-center text-sm md:text-base border-[#c4a747] font-semibold"
-              >
-                Complete your journey
-              </button>
-            )}
-
-            {/* Free conversation input */}
-            <div
-              className="flex items-center gap-2 bg-black/70 backdrop-blur-sm rounded-lg border border-[#c4a747]/30 px-3 py-2"
-              onClick={(e) => e.stopPropagation()}
+          {/* Continue button (when exit conditions met) */}
+          {exitMet && !isTerminal && (
+            <button
+              onClick={handleContinue}
+              className="vn-choice-btn w-full text-center text-sm md:text-base border-[#c4a747] font-semibold"
             >
-              <input
-                ref={inputRef}
-                type="text"
-                value={messageText}
-                onChange={(e) => setMessageText(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder={`Talk to ${gameData.persona.name}...`}
-                className="flex-1 bg-transparent text-[#f0e6d0] text-sm placeholder:text-[#8a8a9a]/60 outline-none"
-              />
-              <button
-                onClick={handleSendMessage}
-                disabled={!messageText.trim()}
-                className="text-[#c4a747] text-sm font-bold hover:text-[#e0c860] disabled:opacity-30 disabled:hover:text-[#c4a747] transition-colors px-2"
-              >
-                {"\u25B6"}
-              </button>
-            </div>
-          </div>
+              Continue {"\u2192"}
+            </button>
+          )}
+
+          {/* End button for terminal scenes */}
+          {isTerminal && (
+            <button
+              onClick={onEnd}
+              className="vn-choice-btn w-full text-center text-sm md:text-base border-[#c4a747] font-semibold"
+            >
+              Complete your journey
+            </button>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Achievement toast */}
       {toastAchievement && (
@@ -701,7 +663,11 @@ function TransitionScreen({
   const { displayed, done, skip } = useTypewriter(text, 40);
 
   return (
-    <div className="relative h-screen w-full overflow-hidden" onClick={done ? onContinue : skip}>
+    <div
+      className="relative rounded-2xl min-h-[320px] sm:min-h-[380px] lg:min-h-[450px] w-full overflow-hidden"
+      onClick={done ? onContinue : skip}
+      data-llm={`Player is transitioning between scenes. Transition: ${text.slice(0, 200)}`}
+    >
       {bgUrl && (
         <div className="vn-background" style={{ backgroundImage: `url(${bgUrl})` }} />
       )}
@@ -753,7 +719,10 @@ function EndScreen({ gameData, gameState }: { gameData: GameData; gameState: Gam
   const bgUrl = lastScene?.backgroundUrl;
 
   return (
-    <div className="relative h-screen w-full overflow-hidden">
+    <div
+      className="relative rounded-2xl min-h-[400px] sm:min-h-[460px] lg:min-h-[540px] w-full overflow-hidden"
+      data-llm={`Game "${gameData.title}" is ending. Player earned ${gameState.unlockedAchievements.length}/${gameData.allAchievements.length} achievements and visited ${gameState.visitedScenes.length}/${gameData.scenes.length} scenes.`}
+    >
       {bgUrl && <div className="vn-background" style={{ backgroundImage: `url(${bgUrl})` }} />}
       <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center z-10 scene-fade-in">
         <div className="text-center px-6 max-w-lg">
@@ -867,7 +836,7 @@ function QuestForge() {
   // Loading
   if (!gameData || !gameState) {
     return (
-      <div className="flex items-center justify-center h-screen bg-[#0a0a0f]">
+      <div className="flex items-center justify-center rounded-2xl min-h-[400px] sm:min-h-[450px] lg:min-h-[520px] bg-[#0a0a0f]">
         <div className="text-center">
           <div className="loading-pulse text-[#c4a747] text-lg font-semibold mb-2">
             Forging your adventure...

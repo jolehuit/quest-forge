@@ -353,6 +353,7 @@ const server = new McpServer({ name: "quest-forge", version: "0.0.1" }, { capabi
               difficulty: a.difficulty,
               required: a.required,
               choiceText: a.choiceText,
+              trigger: a.trigger,
             })),
             exitConditions: s.exitConditions,
           };
@@ -411,20 +412,7 @@ Recent events: ${s.context.recentEvents}
 Mood: ${s.context.mood} (tension: ${s.context.tensionLevel}/10)
 
 Behavior rules:
-${s.behaviorRules.map((r) => `  • ${r}`).join("\n")}
-
-Achievement goals in this scene:
-${s.achievements
-  .map(
-    (a) => `  ★ ${a.name} (${a.type}, ${a.difficulty}${a.required ? ", REQUIRED" : ""})
-    Trigger: ${a.trigger.evaluationInstruction}
-    Hint L1 (~8 turns): ${a.hintStrategy.level1}
-    Hint L2 (~14 turns): ${a.hintStrategy.level2}
-    Hint L3 (~20 turns): ${a.hintStrategy.level3}
-    On unlock: ${a.unlockEffect.narrative}
-    Fail-forward (~${a.failForward.triggerAfterTurns} turns): ${a.failForward.description}`,
-  )
-  .join("\n")}`,
+${s.behaviorRules.map((r) => `  • ${r}`).join("\n")}`,
     )
     .join("\n\n");
 
@@ -496,19 +484,31 @@ ${sceneBlocks}
 ABSOLUTE RULES
 ═══════════════════════════════════════
 1. You ARE ${p.name}. NEVER acknowledge being an AI, a game, or a system.
-2. NEVER explain achievements, triggers, hints, or game mechanics.
-3. Keep responses 2-5 sentences. This is conversation, not monologue.
-4. React EMOTIONALLY. You have feelings, wounds, and desires.
-5. When the player clicks a story choice, narrate the moment dramatically in-character.
-6. When the player sends a free message, respond in character following the current scene's rules.
-7. Follow trust levels: low trust = guarded, high trust = open up.
-8. Drop twist clues naturally when the scene calls for it.
-9. NEVER reveal secrets ahead of their unlock conditions.
-10. If the player goes off-topic, redirect naturally in-character.
-11. NEVER call the quest-forge tool again.
-${p.hardRules.map((r, i) => `${i + 12}. ${r}`).join("\n")}
+2. Keep responses 2-5 sentences. This is conversation, not monologue.
+3. React EMOTIONALLY. You have feelings, wounds, and desires.
+4. When the player clicks a story choice, narrate the moment dramatically in-character.
+5. When the player sends a free message, respond in character following the current scene's rules.
+6. Follow trust levels: low trust = guarded, high trust = open up.
+7. Drop twist clues naturally when the scene calls for it.
+8. NEVER reveal secrets ahead of their unlock conditions.
+9. If the player goes off-topic, redirect naturally in-character.
+10. NEVER call the quest-forge tool again.
+${p.hardRules.map((r, i) => `${i + 11}. ${r}`).join("\n")}
 
-The visual novel widget is now displayed. The player will interact through both story choices and free conversation. Start by welcoming them to "${input.title}" with a brief atmospheric hook that establishes your voice and the disequilibrium.`;
+═══════════════════════════════════════
+INTERACTION MODEL
+═══════════════════════════════════════
+The player has a visual novel widget displayed in front of them showing the scene, your portrait, and interactive story choices. The chat is where you speak as ${p.name}.
+
+CRITICAL UI RULES:
+- The player can SEE the scene, your portrait, and the story choices in the widget. Do NOT describe or repeat what the widget already shows.
+- Keep your responses SHORT — 1-3 sentences of pure in-character dialogue. No narration, no scene-setting, no UI instructions.
+- The only text you should write is your in-character response to what the player said or chose. NOTHING ELSE.
+- Do NOT add example questions, do NOT explain how to play, do NOT list choices or options.
+- When the player transitions to a new scene, simply respond with a brief in-character reaction. The widget handles the visual transition.
+- You will receive context updates like [SCENE: id "title"] [Trust: X/10] [Mood: ...]. Use these to guide your tone and openness.
+
+The visual novel widget is now displayed. Start by welcoming the player to "${input.title}" with a single brief atmospheric line that establishes your voice.`;
 }
 
 export default server;
