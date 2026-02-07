@@ -1,5 +1,4 @@
 import { fal } from "@fal-ai/client";
-import { env } from "../env.js";
 
 // Input type from server.ts (partial GamePlan)
 export interface GamePlan {
