@@ -1,85 +1,46 @@
 import { fal } from "@fal-ai/client";
 import { env } from "../env.js";
 
+// Input type from server.ts (partial GamePlan)
 export interface GamePlan {
-  title: string;
-  theme: string;
   style: string;
-  characters: Array<{
-    id: string;
-    name: string;
-    personality: string;
+  persona: {
     portraitPrompt: string;
-    secretInfo: string;
-    roleplayStyle: string;
-  }>;
+  };
   scenes: Array<{
     id: string;
-    title: string;
     backgroundPrompt: string;
-    dialogue: Array<{ speaker: string | null; text: string }>;
-    choices: Array<{ text: string; nextSceneId: string; grantsAchievement?: string }>;
-    unlockCondition: { type: "achievement"; achievementId: string } | null;
   }>;
-  achievements: Array<{
-    id: string;
-    name: string;
-    description: string;
-    icon: string;
-  }>;
-  startSceneId: string;
-}
-
-interface CharacterWithAsset {
-  id: string;
-  name: string;
-  personality: string;
-  portrait: string;
-  secretInfo: string;
-  roleplayStyle: string;
 }
 
 interface SceneWithAsset {
   id: string;
-  title: string;
-  background: string;
-  dialogue: Array<{ speaker: string | null; text: string }>;
-  choices: Array<{ text: string; nextSceneId: string; grantsAchievement?: string }>;
-  unlockCondition: { type: "achievement"; achievementId: string } | null;
+  backgroundUrl: string;
 }
 
 export interface GameAssets {
-  characters: CharacterWithAsset[];
+  portraitUrl: string;
   scenes: SceneWithAsset[];
 }
 
 /**
- * Generate character portraits and scene backgrounds using Fal AI
+ * Generate character portrait and scene backgrounds using Fal AI
  */
 export async function generateGameAssets(gamePlan: GamePlan): Promise<GameAssets> {
-  // Generate character portraits
-  const charactersWithAssets: CharacterWithAsset[] = await Promise.all(
-    gamePlan.characters.map(async (char) => {
-      try {
-        const result = await fal.subscribe("fal-ai/flux/dev", {
-          input: {
-            prompt: `${char.portraitPrompt}, ${gamePlan.style}, portrait, character art`,
-            image_size: "portrait_4_3",
-          },
-        });
-        return {
-          ...char,
-          portrait: result.data?.images?.[0]?.url || getPlaceholderImage("portrait", char.name),
-        };
-      } catch (error) {
-        console.error(`Failed to generate portrait for ${char.name}:`, error);
-        return {
-          ...char,
-          portrait: getPlaceholderImage("portrait", char.name),
-        };
-      }
-    })
-  );
+  // Generate character portrait
+  let portraitUrl: string;
+  try {
+    const result = await fal.subscribe("fal-ai/flux/dev", {
+      input: {
+        prompt: `${gamePlan.persona.portraitPrompt}, ${gamePlan.style}, portrait, character art`,
+        image_size: "portrait_4_3",
+      },
+    });
+    portraitUrl = result.data?.images?.[0]?.url || getPlaceholderImage("portrait", "Character");
+  } catch (error) {
+    console.error("Failed to generate portrait:", error);
+    portraitUrl = getPlaceholderImage("portrait", "Character");
+  }
 
   // Generate scene backgrounds
   const scenesWithAssets: SceneWithAsset[] = await Promise.all(
@@ -92,21 +53,21 @@ export async function generateGameAssets(gamePlan: GamePlan): Promise<GameAssets
           },
         });
         return {
-          ...scene,
-          background: result.data?.images?.[0]?.url || getPlaceholderImage("scene", scene.title),
+          id: scene.id,
+          backgroundUrl: result.data?.images?.[0]?.url || getPlaceholderImage("scene", scene.id),
         };
       } catch (error) {
-        console.error(`Failed to generate background for ${scene.title}:`, error);
+        console.error(`Failed to generate background for ${scene.id}:`, error);
         return {
-          ...scene,
-          background: getPlaceholderImage("scene", scene.title),
+          id: scene.id,
+          backgroundUrl: getPlaceholderImage("scene", scene.id),
         };
       }
     })
   );
 
   return {
-    characters: charactersWithAssets,
+    portraitUrl,
     scenes: scenesWithAssets,
   };
 }
