@@ -384,6 +384,118 @@
 }
 
 /* ========================================
+   NEW NARRATIVE SYSTEM STYLES
+   ======================================== */
+
+/* Narration Panel */
+.narration-panel {
+  animation: narration-fade-in 0.8s ease-out forwards;
+}
+
+@keyframes narration-fade-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Character Portraits - Left/Right Layout */
+.character-portrait-left {
+  animation: portrait-slide-left 0.6s ease-out forwards;
+}
+
+.character-portrait-right {
+  animation: portrait-slide-right 0.6s ease-out forwards;
+}
+
+@keyframes portrait-slide-left {
+  0% {
+    opacity: 0;
+    transform: translateX(-50px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes portrait-slide-right {
+  0% {
+    opacity: 0;
+    transform: translateX(50px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Exit Choice Buttons */
+.exit-choice-btn {
+  animation: choice-fade-in 0.5s ease-out forwards;
+  opacity: 0;
+}
+
+@keyframes choice-fade-in {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Speaking Indicator Pulse */
+@keyframes speaking-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(196, 167, 71, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(196, 167, 71, 0);
+  }
+}
+
+.speaking-indicator {
+  animation: speaking-pulse 1.5s ease-in-out infinite;
+}
+
+/* Widget Container */
+.vn-widget {
+  width: 100%;
+  height: 100%;
+  min-height: 400px;
+  position: relative;
+  overflow: hidden;
+  background: #0a0a0f;
+  border-radius: 1rem;
+}
+
+/* Trust Level Bar */
+.trust-bar {
+  display: flex;
+  gap: 2px;
+}
+
+.trust-bar-segment {
+  width: 6px;
+  height: 12px;
+  border-radius: 1px;
+  background: rgba(138, 138, 154, 0.3);
+  transition: background 0.3s ease;
+}
+
+.trust-bar-segment.active {
+  background: #c4a747;
+  box-shadow: 0 0 4px rgba(196, 167, 71, 0.5);
+}
+
+/* ========================================
    REDUCED MOTION
    ======================================== */
 @media (prefers-reduced-motion: reduce) {

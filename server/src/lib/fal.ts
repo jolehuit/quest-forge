@@ -24,6 +24,7 @@ export interface GameAssets {
 
 /**
  * Generate character portrait and scene backgrounds using Fal AI
+ * @deprecated Use generateCharacterPortrait and generateSceneBackground separately
  */
 export async function generateGameAssets(gamePlan: GamePlan): Promise<GameAssets> {
   // Generate character portrait
@@ -69,6 +70,50 @@ export async function generateGameAssets(gamePlan: GamePlan): Promise<GameAssets
     portraitUrl,
     scenes: scenesWithAssets,
   };
+}
+
+/**
+ * Generate a character portrait using Fal AI
+ */
+export async function generateCharacterPortrait(
+  appearance: string,
+  style: string
+): Promise<string> {
+  try {
+    const result = await fal.subscribe("fal-ai/flux/dev", {
+      input: {
+        prompt: `${appearance}, ${style}, portrait, character art, high quality, detailed`,
+        image_size: "portrait_4_3",
+        num_inference_steps: 28,
+      },
+    });
+    return result.data?.images?.[0]?.url || getPlaceholderImage("portrait", "Character");
+  } catch (error) {
+    console.error("Failed to generate character portrait:", error);
+    return getPlaceholderImage("portrait", "Character");
+  }
+}
+
+/**
+ * Generate a scene background using Fal AI
+ */
+export async function generateSceneBackground(
+  setting: string,
+  style: string
+): Promise<string> {
+  try {
+    const result = await fal.subscribe("fal-ai/flux/dev", {
+      input: {
+        prompt: `${setting}, ${style}, landscape, scene background, atmospheric, cinematic lighting`,
+        image_size: "landscape_16_9",
+        num_inference_steps: 28,
+      },
+    });
+    return result.data?.images?.[0]?.url || getPlaceholderImage("scene", "Scene");
+  } catch (error) {
+    console.error("Failed to generate scene background:", error);
+    return getPlaceholderImage("scene", "Scene");
+  }
 }
 
 function getPlaceholderImage(type: "portrait" | "scene", name: string): string {

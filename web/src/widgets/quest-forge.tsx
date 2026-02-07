@@ -9,11 +9,20 @@ import { useToolInfo } from "@/helpers";
 interface PreviewData {
   title: string;
   genre: string[];
-  tone: string;
   synopsis: string;
-  portraitUrl: string;
-  personaName: string;
-  scenes: { id: string; title: string; backgroundUrl: string }[];
+  playerCharacter: {
+    name: string;
+    portraitUrl?: string;
+  };
+  initialScene: {
+    narration: string;
+    backgroundUrl: string;
+    presentNPCs: {
+      id: string;
+      name?: string;
+      portraitUrl?: string;
+    }[];
+  };
 }
 
 // ═══════════════════════════════════════
@@ -36,8 +45,8 @@ function QuestForgePreview() {
     );
   }
 
-  const previewData = (toolInfo.responseMetadata as { previewData: PreviewData }).previewData;
-  const bgUrl = previewData.scenes[0]?.backgroundUrl;
+  const previewData = (toolInfo.responseMetadata as unknown as { previewData: PreviewData }).previewData;
+  const bgUrl = previewData.initialScene?.backgroundUrl;
 
   return (
     <div className="relative rounded-2xl min-h-[300px] sm:min-h-[350px] w-full overflow-hidden">
@@ -51,18 +60,18 @@ function QuestForgePreview() {
       <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-black/80" />
 
       <div className="relative z-10 flex flex-col items-center justify-center min-h-[300px] sm:min-h-[350px] px-6 py-8">
-        {/* Portrait */}
-        {previewData.portraitUrl && (
+        {/* Player Character Portrait */}
+        {previewData.playerCharacter?.portraitUrl && (
           <div className="card-stagger-in mb-4">
             <div className="w-20 h-20 md:w-24 md:h-24 rounded-full overflow-hidden border-2 border-[#c4a747]/60 mx-auto shadow-lg shadow-[#c4a747]/20">
               <img
-                src={previewData.portraitUrl}
-                alt={previewData.personaName}
+                src={previewData.playerCharacter.portraitUrl}
+                alt={previewData.playerCharacter.name}
                 className="w-full h-full object-cover"
               />
             </div>
             <p className="text-[#c4a747] text-xs mt-2 uppercase tracking-wider text-center">
-              {previewData.personaName}
+              {previewData.playerCharacter.name}
             </p>
           </div>
         )}
@@ -74,7 +83,7 @@ function QuestForgePreview() {
 
         {/* Genre tags */}
         <p className="text-[#c4a747] text-xs md:text-sm uppercase tracking-[0.3em] mb-3 opacity-80">
-          {previewData.genre.join(" \u00B7 ")}
+          {previewData.genre.join(" · ")}
         </p>
 
         {/* Synopsis */}
