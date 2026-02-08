@@ -1,7 +1,40 @@
 /**
  * Audio generation utilities — TTS via Gradium, music via ElevenLabs
  * Both are optional: functions return null if API keys are missing or on error.
+ * Audio is stored in memory and served via Express endpoint /audio/:id
  */
+
+import crypto from "node:crypto";
+
+// ═══════════════════════════════════════════════════════════
+// Audio store — serves audio via /audio/:id endpoint
+// ═══════════════════════════════════════════════════════════
+
+interface StoredAudio {
+  buffer: Buffer;
+  contentType: string;
+  createdAt: number;
+}
+
+const audioStore = new Map<string, StoredAudio>();
+
+// Cleanup TTL (1h)
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, audio] of audioStore) {
+    if (now - audio.createdAt > 3600000) audioStore.delete(id);
+  }
+}, 600000);
+
+export function getAudioBuffer(id: string): StoredAudio | undefined {
+  return audioStore.get(id);
+}
+
+function storeAudio(buffer: Buffer, contentType: string, ext: string): string {
+  const id = crypto.randomUUID();
+  audioStore.set(id, { buffer, contentType, createdAt: Date.now() });
+  return `/audio/${id}.${ext}`;
+}
 
 // ═══════════════════════════════════════════════════════════
 // TTS — Gradium API
@@ -35,7 +68,7 @@ export async function generateTTS(
     }
 
     const buffer = Buffer.from(await response.arrayBuffer());
-    return buffer.toString("base64");
+    return storeAudio(buffer, "audio/ogg; codecs=opus", "opus");
   } catch (error) {
     console.error("Failed to generate TTS:", error);
     return null;
@@ -77,7 +110,7 @@ export async function generateMusic(
     }
 
     const buffer = Buffer.from(await response.arrayBuffer());
-    return buffer.toString("base64");
+    return storeAudio(buffer, "audio/mpeg", "mp3");
   } catch (error) {
     console.error("Failed to generate music:", error);
     return null;
@@ -104,7 +137,7 @@ export function getNarratorVoice(
 }
 
 // ═══════════════════════════════════════════════════════════
-// Music track generation for Tool 1
+// Music track generation
 // ═══════════════════════════════════════════════════════════
 
 export async function generateMusicTracks(

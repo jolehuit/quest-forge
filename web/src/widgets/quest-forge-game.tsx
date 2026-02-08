@@ -86,8 +86,8 @@ interface GameData {
   introNarration: string;
   speakingNpcId: string;
   speakingNpcName: string;
-  narrationAudioBase64?: string | null;
-  musicAudioBase64?: string | null;
+  narrationAudioUrl?: string | null;
+  musicAudioUrl?: string | null;
 }
 
 type Screen = "title" | "intro" | "game" | "puzzle" | "death" | "end";
@@ -125,8 +125,8 @@ interface GenerateSceneResponse {
     sceneCount: number;
     isEnding: boolean;
     trustLevel: number;
-    narrationAudioBase64?: string | null;
-    musicAudioBase64?: string | null;
+    narrationAudioUrl?: string | null;
+    musicAudioUrl?: string | null;
   };
 }
 
@@ -180,46 +180,25 @@ function QuestForgeGame() {
   // Audio refs
   const narrationAudioRef = useRef<HTMLAudioElement | null>(null);
   const musicAudioRef = useRef<HTMLAudioElement | null>(null);
-  const narrationBlobUrlRef = useRef<string | null>(null);
-  const musicBlobUrlRef = useRef<string | null>(null);
 
-  // Play audio from base64-encoded string
-  const playAudioFromBase64 = useCallback(
+  // Play audio from URL (served by /audio/:id endpoint)
+  const playAudio = useCallback(
     (
-      base64: string,
+      url: string,
       audioRef: React.MutableRefObject<HTMLAudioElement | null>,
-      blobUrlRef: React.MutableRefObject<string | null>,
-      mimeType: string,
       options: { loop?: boolean; volume?: number }
     ) => {
-      // Stop and clean up previous audio
+      // Stop previous audio
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current.src = "";
       }
-      if (blobUrlRef.current) {
-        URL.revokeObjectURL(blobUrlRef.current);
-        blobUrlRef.current = null;
-      }
 
-      try {
-        const byteChars = atob(base64);
-        const byteArray = new Uint8Array(byteChars.length);
-        for (let i = 0; i < byteChars.length; i++) {
-          byteArray[i] = byteChars.charCodeAt(i);
-        }
-        const blob = new Blob([byteArray], { type: mimeType });
-        const url = URL.createObjectURL(blob);
-        blobUrlRef.current = url;
-
-        const audio = new Audio(url);
-        audio.loop = options.loop ?? false;
-        audio.volume = isMuted ? 0 : (options.volume ?? 1);
-        audioRef.current = audio;
-        audio.play().catch(() => {});
-      } catch (e) {
-        console.error("Failed to play audio from base64:", e);
-      }
+      const audio = new Audio(url);
+      audio.loop = options.loop ?? false;
+      audio.volume = isMuted ? 0 : (options.volume ?? 1);
+      audioRef.current = audio;
+      audio.play().catch(() => {});
     },
     [isMuted]
   );
@@ -234,26 +213,14 @@ function QuestForgeGame() {
     }
   }, [isMuted]);
 
-  // Play initial audio from gameData (Tool 2 response)
+  // Play initial audio from gameData
   useEffect(() => {
     if (gameData && gameState._initialized && gameState.screen === "game") {
-      if (gameData.narrationAudioBase64) {
-        playAudioFromBase64(
-          gameData.narrationAudioBase64,
-          narrationAudioRef,
-          narrationBlobUrlRef,
-          "audio/ogg; codecs=opus",
-          { loop: false, volume: 0.9 }
-        );
+      if (gameData.narrationAudioUrl) {
+        playAudio(gameData.narrationAudioUrl, narrationAudioRef, { loop: false, volume: 0.9 });
       }
-      if (gameData.musicAudioBase64) {
-        playAudioFromBase64(
-          gameData.musicAudioBase64,
-          musicAudioRef,
-          musicBlobUrlRef,
-          "audio/mpeg",
-          { loop: true, volume: 0.3 }
-        );
+      if (gameData.musicAudioUrl) {
+        playAudio(gameData.musicAudioUrl, musicAudioRef, { loop: true, volume: 0.3 });
       }
     }
     // Only trigger on first game screen entry
@@ -270,12 +237,6 @@ function QuestForgeGame() {
       if (musicAudioRef.current) {
         musicAudioRef.current.pause();
         musicAudioRef.current.src = "";
-      }
-      if (narrationBlobUrlRef.current) {
-        URL.revokeObjectURL(narrationBlobUrlRef.current);
-      }
-      if (musicBlobUrlRef.current) {
-        URL.revokeObjectURL(musicBlobUrlRef.current);
       }
     };
   }, []);
@@ -325,7 +286,7 @@ function QuestForgeGame() {
           sceneCount: gameState.sceneCount,
         });
 
-        const { scene, speakingNpcName, isEnding, trustLevel, narrationAudioBase64, musicAudioBase64 } = result.structuredContent;
+        const { scene, speakingNpcName, isEnding, trustLevel, narrationAudioUrl, musicAudioUrl } = result.structuredContent;
 
         // Visual transition
         setIsTransitioning(true);
@@ -356,23 +317,11 @@ function QuestForgeGame() {
           setIsTransitioning(false);
 
           // Play audio for the new scene
-          if (narrationAudioBase64) {
-            playAudioFromBase64(
-              narrationAudioBase64,
-              narrationAudioRef,
-              narrationBlobUrlRef,
-              "audio/ogg; codecs=opus",
-              { loop: false, volume: 0.9 }
-            );
+          if (narrationAudioUrl) {
+            playAudio(narrationAudioUrl, narrationAudioRef, { loop: false, volume: 0.9 });
           }
-          if (musicAudioBase64) {
-            playAudioFromBase64(
-              musicAudioBase64,
-              musicAudioRef,
-              musicBlobUrlRef,
-              "audio/mpeg",
-              { loop: true, volume: 0.3 }
-            );
+          if (musicAudioUrl) {
+            playAudio(musicAudioUrl, musicAudioRef, { loop: true, volume: 0.3 });
           }
         }, 400);
 
@@ -398,7 +347,7 @@ function QuestForgeGame() {
         );
       }
     },
-    [gameData, isGeneratingScene, callToolAsync, gameState, sendFollowUpMessage, setGameState, playAudioFromBase64]
+    [gameData, isGeneratingScene, callToolAsync, gameState, sendFollowUpMessage, setGameState, playAudio]
   );
 
   // Handle start game

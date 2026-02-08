@@ -139,13 +139,6 @@ const CreateStorySchema = z.object({
   }),
 });
 
-// ═══════════════════════════════════════════════════════════
-// TOOL 2 SCHEMA — Start game (simplified)
-// ═══════════════════════════════════════════════════════════
-
-const StartGameSchema = z.object({
-  gameId: z.string().describe("The gameId returned by quest-forge"),
-});
 
 // ═══════════════════════════════════════════════════════════
 // TOOL 3 SCHEMA — Generate next scene
@@ -189,13 +182,15 @@ setInterval(() => {
 // TOOL DESCRIPTIONS
 // ═══════════════════════════════════════════════════════════
 
-const TOOL1_DESCRIPTION = `Create a narrative visual novel with dynamic scene generation.
+const TOOL_DESCRIPTION = `Create and start a narrative visual novel game. This single tool creates the story, generates all artwork, and immediately launches the game widget.
 
 This tool establishes:
 1. The player character (who the player embodies)
 2. NPCs with distinct personalities and secrets
 3. The story world and central mystery
 4. The opening scene with narration and choices
+5. AI-generated portraits for all characters
+6. AI-generated background for the opening scene
 
 STORY STRUCTURE:
 - 6 scenes maximum (to manage token limits)
@@ -218,18 +213,9 @@ SCENE FLOW:
 EXIT FORMAT:
 - Each exit includes a nextScene object with setting, mood, situation, presentNPCIds, speakingNPCId
 - This data is used by the server to build the next scene without calling the LLM
-- Write rich, evocative situations (2-3 sentences) and specific settings for good Fal AI backgrounds`;
+- Write rich, evocative situations (2-3 sentences) and specific settings for good Fal AI backgrounds
 
-const TOOL2_DESCRIPTION = `Start the visual novel game created with quest-forge.
-
-Returns the initial scene data and system prompt for the LLM.
-The widget will display:
-- Narration text at the top
-- Player character portrait on the left
-- NPC portrait(s) on the right
-- Choice buttons at the bottom
-
-When the player makes a choice, the widget calls quest-forge-generate-scene via useCallTool.`;
+IMPORTANT: After calling this tool, do NOT output any text. The game widget handles everything. Wait in silence until the game sends you a message.`;
 
 const TOOL3_DESCRIPTION = `Generate the next scene based on the player's choice. Called by the game widget via useCallTool.
 
@@ -456,16 +442,16 @@ const SHARED_CSP = {
 
 const server = new McpServer({ name: "quest-forge", version: "0.1.0" }, { capabilities: {} })
   // ═══════════════════════════════════════════════════════════
-  // Tool 1: quest-forge (create narrative world)
+  // Tool: quest-forge-game (create & play narrative visual novel)
   // ═══════════════════════════════════════════════════════════
   .registerWidget(
-    "quest-forge",
+    "quest-forge-game",
     {
-      description: "Quest Forge — Create Narrative Visual Novel",
+      description: "Quest Forge — Create & Play Visual Novel",
       _meta: { ui: { csp: SHARED_CSP } },
     },
     {
-      description: TOOL1_DESCRIPTION,
+      description: TOOL_DESCRIPTION,
       inputSchema: CreateStorySchema.shape,
       annotations: {
         readOnlyHint: true,
@@ -473,8 +459,8 @@ const server = new McpServer({ name: "quest-forge", version: "0.1.0" }, { capabi
         openWorldHint: true,
       },
       _meta: {
-        "openai/toolInvocation/invoking": "Creating your narrative world...",
-        "openai/toolInvocation/invoked": "World created! Starting the story...",
+        "openai/toolInvocation/invoking": "Creating your adventure...",
+        "openai/toolInvocation/invoked": "Your story begins!",
       },
     },
     async (args) => {
@@ -566,125 +552,36 @@ const server = new McpServer({ name: "quest-forge", version: "0.1.0" }, { capabi
           createdAt: Date.now(),
         });
 
-        // Build preview data
-        const previewData = {
-          title: input.title,
-          genre: input.genre,
-          synopsis: input.synopsis,
-          playerCharacter: {
-            name: input.playerCharacter.name,
-            portraitUrl: characterPortraits.get(input.playerCharacter.id),
-          },
-          initialScene: {
-            narration: initialScene.narration.text,
-            backgroundUrl: initialBackgroundUrl,
-            presentNPCs: input.initialScene.presentNPCs.map(id => ({
-              id,
-              name: input.npcs.find(n => n.id === id)?.name,
-              portraitUrl: characterPortraits.get(id),
-            })),
-          },
-        };
-
-        return {
-          structuredContent: {
-            gameId,
-            title: input.title,
-            genre: input.genre,
-            synopsis: input.synopsis,
-          },
-          content: [
-            {
-              type: "text" as const,
-              text: `Your story "${input.title}" is ready!\n\n` +
-                    `${allCharacters.length} characters created with their portraits.\n\n` +
-                    `Click the "PLAY" button in the widget above to start your adventure.\n\n` +
-                    `Or tell me what you'd like to change (title, characters, scenario...) and I'll regenerate.`,
-            },
-          ],
-          _meta: { previewData },
-          isError: false,
-        };
-      } catch (error) {
-        return {
-          content: [{ type: "text" as const, text: `Error creating story: ${error}` }],
-          isError: true,
-        };
-      }
-    },
-  )
-
-  // ═══════════════════════════════════════════════════════════
-  // Tool 2: quest-forge-game (start game)
-  // ═══════════════════════════════════════════════════════════
-  .registerWidget(
-    "quest-forge-game",
-    {
-      description: "Quest Forge — Play Visual Novel",
-      _meta: { ui: { csp: SHARED_CSP } },
-    },
-    {
-      description: TOOL2_DESCRIPTION,
-      inputSchema: StartGameSchema.shape,
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        openWorldHint: false,
-      },
-      _meta: {
-        "openai/toolInvocation/invoking": "Starting your adventure...",
-        "openai/toolInvocation/invoked": "Your story begins!",
-      },
-    },
-    async (args) => {
-      const input = args as unknown as z.infer<typeof StartGameSchema>;
-      try {
-        const game = gameStore.get(input.gameId);
-        if (!game) {
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: `Error: gameId "${input.gameId}" not found. It may have expired (1h TTL).`,
-              },
-            ],
-            isError: true,
-          };
-        }
-
-        const initialScene = game.scenes.get("scene-1")!;
-        const playerChar = game.characters.get(game.story.playerCharacter.id)! as z.infer<typeof PlayerCharacterSchema> & { portraitUrl?: string };
-
         // Find the speaking NPC in the initial scene
-        const speakingCharEntry = initialScene.characters.find(c => c.isSpeaking && c.characterId !== playerChar.id);
-        const speakingNpcId = speakingCharEntry?.characterId || game.story.npcs[0]?.id;
-        const speakingNpc = game.story.npcs.find(n => n.id === speakingNpcId)!;
+        const speakingCharEntry = initialScene.characters.find(c => c.isSpeaking && c.characterId !== input.playerCharacter.id);
+        const speakingNpcId = speakingCharEntry?.characterId || input.npcs[0]?.id;
+        const speakingNpc = input.npcs.find(n => n.id === speakingNpcId)!;
 
         // Generate TTS narration for the initial scene
-        const voiceId = getNarratorVoice(game.language);
-        const narrationAudioBase64 = await generateTTS(initialScene.narration.text, voiceId);
+        const voiceId = getNarratorVoice(input.language);
+        const narrationAudioUrl = await generateTTS(initialScene.narration.text, voiceId);
         const musicTrackKey = getMusicTrackForMood(initialScene.narration.mood);
-        const musicAudioBase64 = game.musicTracks.get(musicTrackKey) ?? game.musicTracks.values().next().value ?? null;
+        const musicAudioUrl = musicTracks.get(musicTrackKey) ?? musicTracks.values().next().value ?? null;
 
         // Build game data for widget
         const gameData = {
-          gameId: input.gameId,
-          title: game.story.title,
-          genre: game.story.genre,
-          synopsis: game.story.synopsis,
-          style: game.story.style,
-          worldContext: game.story.worldContext,
+          gameId,
+          title: input.title,
+          genre: input.genre,
+          synopsis: input.synopsis,
+          style: input.style,
+          worldContext: input.worldContext,
           speakingNpcId,
           speakingNpcName: speakingNpc.name,
           playerCharacter: {
-            id: playerChar.id,
-            name: playerChar.name,
-            portraitUrl: playerChar.portraitUrl,
-            background: playerChar.background,
-            motivation: (playerChar as any).motivation,
-            innerConflict: (playerChar as any).innerConflict,
+            id: input.playerCharacter.id,
+            name: input.playerCharacter.name,
+            portraitUrl: characterPortraits.get(input.playerCharacter.id),
+            background: input.playerCharacter.background,
+            motivation: input.playerCharacter.motivation,
+            innerConflict: input.playerCharacter.innerConflict,
           },
-          characters: Array.from(game.characters.values()).map(c => ({
+          characters: Array.from(charactersMap.values()).map(c => ({
             id: c.id,
             name: c.name,
             isPlayer: c.isPlayer,
@@ -692,32 +589,35 @@ const server = new McpServer({ name: "quest-forge", version: "0.1.0" }, { capabi
             personality: c.personality,
           })),
           currentScene: initialScene,
-          introNarration: game.story.introNarration,
-          narrationAudioBase64,
-          musicAudioBase64,
+          introNarration: input.introNarration,
+          narrationAudioUrl,
+          musicAudioUrl,
         };
 
         // Build system prompt focused on ONE NPC
         const systemPrompt = buildNarrativeSystemPrompt(
-          game.story,
+          input,
           speakingNpc,
-          game.story.playerCharacter,
+          input.playerCharacter,
           5,
           [],
         );
 
         return {
           structuredContent: {
-            title: game.story.title,
-            genre: game.story.genre,
+            title: input.title,
+            genre: input.genre,
           },
-          content: [{ type: "text" as const, text: systemPrompt }],
+          content: [{
+            type: "text" as const,
+            text: systemPrompt + `\n\n---\n[CRITICAL INSTRUCTION] The game widget is now displayed. Do NOT output any text. Wait in complete silence until the game widget sends you a message (starting with [Scene] or [PUZZLE]). Your role begins only when the player starts interacting.`,
+          }],
           _meta: { gameData },
           isError: false,
         };
       } catch (error) {
         return {
-          content: [{ type: "text" as const, text: `Error starting game: ${error}` }],
+          content: [{ type: "text" as const, text: `Error creating story: ${error}` }],
           isError: true,
         };
       }
@@ -859,9 +759,9 @@ const server = new McpServer({ name: "quest-forge", version: "0.1.0" }, { capabi
 
         // Generate TTS narration for the new scene
         const voiceId = getNarratorVoice(game.language);
-        const narrationAudioBase64 = await generateTTS(newScene.narration.text, voiceId);
+        const narrationAudioUrl = await generateTTS(newScene.narration.text, voiceId);
         const musicTrackKey = getMusicTrackForMood(newScene.narration.mood);
-        const musicAudioBase64 = game.musicTracks.get(musicTrackKey) ?? game.musicTracks.values().next().value ?? null;
+        const musicAudioUrl = game.musicTracks.get(musicTrackKey) ?? game.musicTracks.values().next().value ?? null;
 
         // Find the speaking NPC details
         const speakingNpc = game.story.npcs.find(n => n.id === nextSceneData.speakingNPCId);
@@ -900,8 +800,8 @@ INTERDICTIONS (violation = échec du jeu):
         return {
           structuredContent: {
             scene: newScene,
-            narrationAudioBase64,
-            musicAudioBase64,
+            narrationAudioUrl,
+            musicAudioUrl,
             speakingNpcId: nextSceneData.speakingNPCId,
             speakingNpcName,
             sceneCount: newSceneCount,

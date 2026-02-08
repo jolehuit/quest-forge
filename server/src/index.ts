@@ -4,10 +4,24 @@ import type { ViteDevServer } from "vite";
 import { env } from "./env.js";
 import { mcp } from "./middleware.js";
 import server from "./server.js";
+import { getAudioBuffer } from "./lib/audio.js";
 
 const app = express() as Express & { vite: ViteDevServer };
 
 app.use(express.json());
+
+// Audio endpoint — serves generated TTS/music audio files
+app.get("/audio/:id", (req, res) => {
+  const audioId = req.params.id.replace(/\.\w+$/, ""); // strip .opus/.mp3 extension
+  const audio = getAudioBuffer(audioId);
+  if (!audio) {
+    res.status(404).send("Not found");
+    return;
+  }
+  res.set("Content-Type", audio.contentType);
+  res.set("Cache-Control", "public, max-age=3600");
+  res.send(audio.buffer);
+});
 
 app.use(mcp(server));
 
