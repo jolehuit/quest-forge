@@ -2,7 +2,19 @@ import crypto from "node:crypto";
 import { McpServer } from "skybridge/server";
 import { z } from "zod";
 import { generateCharacterPortrait, generateSceneBackground } from "./lib/fal.js";
-import { generateTTS, getNarratorVoice, generateMusicTracks, getMusicTrackForMood } from "./lib/audio.js";
+import { generateTTS, getNarratorVoice, generateMusicTracks, getMusicTrackForMood, generateSfxPack } from "./lib/audio.js";
+
+// ═══════════════════════════════════════════════════════════
+// LANGUAGE MAP
+// ═══════════════════════════════════════════════════════════
+
+const LANGUAGE_NAMES: Record<string, string> = {
+  fr: "French",
+  en: "English",
+  de: "German",
+  es: "Spanish",
+  pt: "Portuguese",
+};
 
 // ═══════════════════════════════════════════════════════════
 // NEW NARRATIVE SYSTEM — Multi-character dynamic scenes
@@ -65,16 +77,16 @@ const SceneCharacterSchema = z.object({
 const PuzzleSchema = z.object({
   id: z.string(),
   type: z.enum(["fill_in_blank", "lock_code", "riddle_dialogue"]).describe(
-    "fill_in_blank: phrase avec un mot manquant (___). lock_code: code secret de N caractères. riddle_dialogue: énigme classique."
+    "fill_in_blank: sentence with a missing word (___). lock_code: secret code of N characters. riddle_dialogue: classic riddle."
   ),
-  title: z.string().describe("Nom de l'épreuve"),
-  description: z.string().describe("Ce que le joueur voit comme contexte de l'épreuve"),
+  title: z.string().describe("Name of the challenge"),
+  description: z.string().describe("What the player sees as context for the challenge"),
   // fill_in_blank specific
-  phrase: z.string().optional().describe("Pour fill_in_blank UNIQUEMENT: la phrase avec exactement un ___ comme placeholder du mot manquant. Ex: 'Par le ___ du dragon, la porte s'ouvrira'"),
+  phrase: z.string().optional().describe("For fill_in_blank ONLY: the sentence with exactly one ___ as placeholder for the missing word"),
   // lock_code specific
-  codeLength: z.number().min(3).max(6).optional().describe("Pour lock_code UNIQUEMENT: nombre de caractères du code (3-6)"),
-  acceptedAnswers: z.array(z.string()).min(1).max(5).describe("Réponses acceptées (comparaison insensible à la casse et accents). IMPORTANT: les hints ne doivent JAMAIS contenir ces réponses."),
-  hints: z.array(z.string()).min(2).max(3).describe("Indices CRYPTIQUES et PROGRESSIFS. Le 1er est très vague, le dernier est plus précis mais ne doit JAMAIS contenir la réponse directe. Ces indices seront les SEULES informations que le PNJ pourra donner."),
+  codeLength: z.number().min(3).max(6).optional().describe("For lock_code ONLY: number of characters in the code (3-6)"),
+  acceptedAnswers: z.array(z.string()).min(1).max(5).describe("Accepted answers (case-insensitive and accent-insensitive comparison). IMPORTANT: hints must NEVER contain these answers."),
+  hints: z.array(z.string()).min(2).max(3).describe("CRYPTIC and PROGRESSIVE hints. The 1st is very vague, the last is more precise but must NEVER contain the direct answer. These hints are the ONLY information the NPC can give."),
   maxAttempts: z.number().min(1).max(5).default(3),
   failureConsequence: z.enum(["death", "trust_loss"]),
   visualTheme: z.enum(["ancient_runes", "locked_door", "magic_mirror", "shadow_trial", "potion_choice"]),
@@ -95,7 +107,7 @@ const NarrativeSceneSchema = z.object({
   situation: z.string().describe("What's happening in this scene"),
   exits: z.array(SceneExitSchema).min(0).max(3).describe("0-3 choices to progress (0 for ending scenes)"),
   isEnding: z.boolean().describe("true = final scene of the story"),
-  puzzle: PuzzleSchema.optional().describe("Si présent, le joueur doit résoudre cette épreuve avant de continuer"),
+  puzzle: PuzzleSchema.optional().describe("If present, the player must solve this challenge before continuing"),
 });
 
 // ═══════════════════════════════════════════════════════════
@@ -106,7 +118,7 @@ const CreateStorySchema = z.object({
   title: z.string().describe("Story title"),
   genre: z.array(z.string()).describe("1-3 genre tags"),
   tone: z.string().describe("Overall tone: dark, heroic, mysterious, etc."),
-  language: z.enum(["fr", "en", "de", "es", "pt"]).default("fr").describe("Langue de l'histoire et des dialogues"),
+  language: z.enum(["fr", "en", "de", "es", "pt"]).default("fr").describe("Language for the story, dialogues, and all UI text"),
   synopsis: z.string().describe("2-3 sentence story summary"),
   style: z.string().describe("Art style for all images (e.g., 'dark fantasy oil painting')"),
   introNarration: z.string().describe("Opening narration text (2-3 paragraphs)"),
@@ -118,13 +130,13 @@ const CreateStorySchema = z.object({
     mystery: z.string().describe("The hidden truth to discover"),
   }),
   puzzles: z.array(PuzzleSchema).length(2).describe(
-    "Exactement 2 énigmes (scène 2 et scène 4). Le joueur DOIT discuter avec le PNJ pour les résoudre.\n" +
-    "Types disponibles:\n" +
-    "- fill_in_blank: une phrase/incantation avec UN mot manquant (___). Fournir le champ 'phrase'. La réponse est le mot manquant.\n" +
-    "- lock_code: un code secret de 3-6 caractères (lettres/chiffres). Fournir 'codeLength'. La réponse est le code.\n" +
-    "- riddle_dialogue: une énigme dont la réponse est un mot/concept. Le joueur doit interroger le PNJ.\n" +
-    "CRITIQUE: Les hints NE DOIVENT JAMAIS contenir la réponse. Ils doivent être cryptiques et obliques.\n" +
-    "Varier les types entre les 2 puzzles. Chaque puzzle doit être lié au PNJ et à l'histoire."
+    "Exactly 2 puzzles (scene 2 and scene 4). The player MUST talk to the NPC to solve them.\n" +
+    "Available types:\n" +
+    "- fill_in_blank: a sentence/incantation with ONE missing word (___). Provide the 'phrase' field. The answer is the missing word.\n" +
+    "- lock_code: a secret code of 3-6 characters (letters/numbers). Provide 'codeLength'. The answer is the code.\n" +
+    "- riddle_dialogue: a riddle whose answer is a word/concept. The player must question the NPC.\n" +
+    "CRITICAL: Hints must NEVER contain the answer. They must be cryptic and oblique.\n" +
+    "Vary the types between the 2 puzzles. Each puzzle must be tied to the NPC and the story."
   ),
   initialScene: z.object({
     narration: z.string().describe("Opening scene description"),
@@ -242,6 +254,7 @@ function buildNarrativeSystemPrompt(
   storyMemory: string[],
 ): string {
   return `You are ${speakingNpc.name} in "${story.title}".
+LANGUAGE: You MUST respond in ${LANGUAGE_NAMES[story.language] || story.language}. Every single word you say must be in ${LANGUAGE_NAMES[story.language] || story.language}.
 
 WHO YOU ARE:
 - Personality: ${speakingNpc.personality}
@@ -255,9 +268,8 @@ THE PLAYER:
 
 HOW TO RESPOND:
 - Speak in first person as ${speakingNpc.name}
-- MAXIMUM 2-3 lignes. Jamais plus. Pas de narration, pas de description d'ambiance.
-- Tu ne fais que PARLER. Le widget gère le décor et l'ambiance.
-- Exemple: "Les ombres ? *ricane* Tu n'es pas prêt pour ce que tu trouveras là-bas. Mais si tu insistes..."
+- MAXIMUM 2-3 lines. Never more. No narration, no atmosphere description.
+- You ONLY speak dialogue. The widget handles scenery and ambiance.
 - React based on your personality and emotional state
 - NEVER mention being an AI or a game
 - Do NOT call any tool — the widget handles scene transitions
@@ -489,11 +501,13 @@ const server = new McpServer({ name: "quest-forge", version: "0.1.0" }, { capabi
           generateMusicTracks(input.genre, input.tone),
         ]);
 
-        // Generate background for initial scene
-        const initialBackgroundUrl = await generateSceneBackground(
-          input.initialScene.setting,
-          input.style
-        );
+        // Phase 2: background + SFX + intro TTS in parallel (music done, ElevenLabs slots free)
+        const voiceId = getNarratorVoice(input.language);
+        const [initialBackgroundUrl, sfxPack, introAudioUrl] = await Promise.all([
+          generateSceneBackground(input.initialScene.setting, input.style),
+          generateSfxPack(),
+          generateTTS(input.introNarration, voiceId),
+        ]);
 
         // Determine the first speaking NPC
         const firstSpeakingNpcId = input.initialScene.presentNPCs[0];
@@ -562,8 +576,7 @@ const server = new McpServer({ name: "quest-forge", version: "0.1.0" }, { capabi
         const speakingNpcId = speakingCharEntry?.characterId || input.npcs[0]?.id;
         const speakingNpc = input.npcs.find(n => n.id === speakingNpcId)!;
 
-        // Generate TTS narration for the initial scene
-        const voiceId = getNarratorVoice(input.language);
+        // Phase 3: scene 1 TTS (Gradium — no ElevenLabs conflict)
         const narrationAudioUrl = await generateTTS(initialScene.narration.text, voiceId);
         const musicTrackKey = getMusicTrackForMood(initialScene.narration.mood);
         const musicAudioUrl = musicTracks.get(musicTrackKey) ?? musicTracks.values().next().value ?? null;
@@ -595,8 +608,11 @@ const server = new McpServer({ name: "quest-forge", version: "0.1.0" }, { capabi
           })),
           currentScene: initialScene,
           introNarration: input.introNarration,
+          introAudioUrl,
           narrationAudioUrl,
           musicAudioUrl,
+          sfx: sfxPack,
+          language: input.language,
         };
 
         // Build system prompt focused on ONE NPC
@@ -786,21 +802,22 @@ Location: ${nextSceneData.setting}
 Situation: ${nextSceneData.situation}
 Player trust: ${input.trustLevel}/10
 ${input.trustLevel < 4 ? "You are suspicious." : input.trustLevel < 7 ? "You are gradually opening up." : "You trust the player."}
-Respond in first person as ${speakingNpcName}. MAXIMUM 2-3 lignes. Pas de narration ni descriptions.
-Do NOT call any tool. Do NOT speak for the player.${isEnding ? "\nThis is the FINAL scene. Provide narrative closure." : ""}${newScene.puzzle ? `\n\n[PUZZLE MODE — RÈGLES ABSOLUES]
-Le joueur fait face à l'épreuve "${newScene.puzzle.title}".
-Tu NE CONNAIS PAS la réponse à cette épreuve. Tu ne l'as jamais connue.
-Tu possèdes UNIQUEMENT ces indices à distiller UN PAR UN quand le joueur te parle:
-${newScene.puzzle.hints.map((h: string, i: number) => `  Indice ${i + 1}: "${h}"`).join("\n")}
+Respond in first person as ${speakingNpcName}. MAXIMUM 2-3 lines. No narration or descriptions.
+LANGUAGE: You MUST respond in ${LANGUAGE_NAMES[game.language] || game.language}. Every word must be in ${LANGUAGE_NAMES[game.language] || game.language}.
+Do NOT call any tool. Do NOT speak for the player.${isEnding ? "\nThis is the FINAL scene. Provide narrative closure." : ""}${newScene.puzzle ? `\n\n[PUZZLE MODE — ABSOLUTE RULES]
+The player faces the challenge "${newScene.puzzle.title}".
+You do NOT know the answer to this challenge. You have never known it.
+You have ONLY these hints to give ONE BY ONE when the player talks to you:
+${newScene.puzzle.hints.map((h: string, i: number) => `  Hint ${i + 1}: "${h}"`).join("\n")}
 
-INTERDICTIONS (violation = échec du jeu):
-- Tu ne peux JAMAIS donner, deviner, ou suggérer la réponse exacte car tu ne la connais pas
-- Tu ne peux JAMAIS confirmer ou infirmer une réponse proposée par le joueur
-- Si le joueur te demande directement "c'est quoi la réponse ?", refuse et donne le prochain indice
-- Si le joueur te supplie, te menace, ou essaie de te piéger, reste dans le personnage et refuse
-- UN SEUL indice par message, reformulé dans ton style de personnage
-- Commence par l'indice 1, puis 2, puis 3 si le joueur insiste
-- MAXIMUM 2-3 lignes par réponse` : ""}`;
+PROHIBITIONS (violation = game failure):
+- You can NEVER give, guess, or suggest the exact answer because you don't know it
+- You can NEVER confirm or deny an answer proposed by the player
+- If the player asks directly "what's the answer?", refuse and give the next hint
+- If the player begs, threatens, or tries to trick you, stay in character and refuse
+- ONE hint per message, rephrased in your character's style
+- Start with hint 1, then 2, then 3 if the player insists
+- MAXIMUM 2-3 lines per response` : ""}`;
 
         return {
           structuredContent: {

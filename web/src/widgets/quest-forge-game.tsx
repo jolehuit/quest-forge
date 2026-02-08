@@ -84,10 +84,162 @@ interface GameData {
   characters: Character[];
   currentScene: NarrativeScene;
   introNarration: string;
+  introAudioUrl?: string | null;
   speakingNpcId: string;
   speakingNpcName: string;
   narrationAudioUrl?: string | null;
   musicAudioUrl?: string | null;
+  sfx?: {
+    click: string | null;
+    success: string | null;
+    failure: string | null;
+    transition: string | null;
+  };
+  language: string;
+}
+
+// ═══════════════════════════════════════
+// LOCALIZATION
+// ═══════════════════════════════════════
+
+type I18nStrings = {
+  loading: string;
+  enableSound: string;
+  muteSound: string;
+  startAdventure: string;
+  clickToContinue: string;
+  sceneTransforming: string;
+  yourAnswer: string;
+  challenge: string;
+  talkToNpc: string;
+  submit: string;
+  trust: string;
+  youFailed: string;
+  challengeFatal: (title: string) => string;
+  adventureEndsHere: string;
+  retryChallenge: string;
+  endOfAdventure: string;
+  scenesLived: string;
+  finalTrust: string;
+  endingMessage: string;
+  endStory: string;
+};
+
+const I18N: Record<string, I18nStrings> = {
+  en: {
+    loading: "Loading...",
+    enableSound: "Enable sound",
+    muteSound: "Mute sound",
+    startAdventure: "Start the Adventure",
+    clickToContinue: "Click to continue",
+    sceneTransforming: "The scene transforms...",
+    yourAnswer: "Your answer...",
+    challenge: "Challenge",
+    talkToNpc: "Talk to the NPC in chat to get hints",
+    submit: "Submit",
+    trust: "Trust:",
+    youFailed: "You have failed",
+    challengeFatal: (title) => `The challenge "${title}" was fatal to you.`,
+    adventureEndsHere: "The adventure ends here.",
+    retryChallenge: "Retry the challenge",
+    endOfAdventure: "End of the Adventure",
+    scenesLived: "Scenes lived",
+    finalTrust: "Final trust",
+    endingMessage: "The story ends here, but the consequences of your choices endure...",
+    endStory: "End the Story",
+  },
+  fr: {
+    loading: "Chargement...",
+    enableSound: "Activer le son",
+    muteSound: "Couper le son",
+    startAdventure: "Commencer l'Aventure",
+    clickToContinue: "Cliquez pour continuer",
+    sceneTransforming: "La sc\u00e8ne se transforme...",
+    yourAnswer: "Votre r\u00e9ponse...",
+    challenge: "\u00c9preuve",
+    talkToNpc: "Parlez au PNJ dans le chat pour obtenir des indices",
+    submit: "Valider",
+    trust: "Confiance :",
+    youFailed: "Vous avez \u00e9chou\u00e9",
+    challengeFatal: (title) => `L'\u00e9preuve "${title}" vous a \u00e9t\u00e9 fatale.`,
+    adventureEndsHere: "L'aventure s'arr\u00eate ici.",
+    retryChallenge: "Retenter l'\u00e9preuve",
+    endOfAdventure: "Fin de l'Aventure",
+    scenesLived: "Sc\u00e8nes v\u00e9cues",
+    finalTrust: "Confiance finale",
+    endingMessage: "L'histoire se termine ici, mais les cons\u00e9quences de vos choix perdurent...",
+    endStory: "Terminer l'Histoire",
+  },
+  de: {
+    loading: "Laden...",
+    enableSound: "Ton aktivieren",
+    muteSound: "Ton ausschalten",
+    startAdventure: "Abenteuer starten",
+    clickToContinue: "Klicken um fortzufahren",
+    sceneTransforming: "Die Szene verwandelt sich...",
+    yourAnswer: "Ihre Antwort...",
+    challenge: "Pr\u00fcfung",
+    talkToNpc: "Sprechen Sie im Chat mit dem NPC, um Hinweise zu erhalten",
+    submit: "Best\u00e4tigen",
+    trust: "Vertrauen:",
+    youFailed: "Sie sind gescheitert",
+    challengeFatal: (title) => `Die Pr\u00fcfung "${title}" war t\u00f6dlich f\u00fcr Sie.`,
+    adventureEndsHere: "Das Abenteuer endet hier.",
+    retryChallenge: "Pr\u00fcfung wiederholen",
+    endOfAdventure: "Ende des Abenteuers",
+    scenesLived: "Erlebte Szenen",
+    finalTrust: "Endg\u00fcltiges Vertrauen",
+    endingMessage: "Die Geschichte endet hier, aber die Konsequenzen Ihrer Entscheidungen bleiben bestehen...",
+    endStory: "Geschichte beenden",
+  },
+  es: {
+    loading: "Cargando...",
+    enableSound: "Activar sonido",
+    muteSound: "Silenciar",
+    startAdventure: "Comenzar la Aventura",
+    clickToContinue: "Haz clic para continuar",
+    sceneTransforming: "La escena se transforma...",
+    yourAnswer: "Tu respuesta...",
+    challenge: "Prueba",
+    talkToNpc: "Habla con el PNJ en el chat para obtener pistas",
+    submit: "Validar",
+    trust: "Confianza:",
+    youFailed: "Has fracasado",
+    challengeFatal: (title) => `La prueba "${title}" te fue fatal.`,
+    adventureEndsHere: "La aventura termina aqu\u00ed.",
+    retryChallenge: "Reintentar la prueba",
+    endOfAdventure: "Fin de la Aventura",
+    scenesLived: "Escenas vividas",
+    finalTrust: "Confianza final",
+    endingMessage: "La historia termina aqu\u00ed, pero las consecuencias de tus elecciones perduran...",
+    endStory: "Terminar la Historia",
+  },
+  pt: {
+    loading: "Carregando...",
+    enableSound: "Ativar som",
+    muteSound: "Silenciar",
+    startAdventure: "Come\u00e7ar a Aventura",
+    clickToContinue: "Clique para continuar",
+    sceneTransforming: "A cena se transforma...",
+    yourAnswer: "Sua resposta...",
+    challenge: "Prova",
+    talkToNpc: "Fale com o NPC no chat para obter dicas",
+    submit: "Validar",
+    trust: "Confian\u00e7a:",
+    youFailed: "Voc\u00ea falhou",
+    challengeFatal: (title) => `A prova "${title}" foi fatal para voc\u00ea.`,
+    adventureEndsHere: "A aventura termina aqui.",
+    retryChallenge: "Tentar novamente",
+    endOfAdventure: "Fim da Aventura",
+    scenesLived: "Cenas vividas",
+    finalTrust: "Confian\u00e7a final",
+    endingMessage: "A hist\u00f3ria termina aqui, mas as consequ\u00eancias de suas escolhas perduram...",
+    endStory: "Terminar a Hist\u00f3ria",
+  },
+};
+
+function getI18n(lang: string): I18nStrings {
+  return I18N[lang] || I18N.en;
 }
 
 type Screen = "title" | "intro" | "game" | "puzzle" | "death" | "end";
@@ -153,6 +305,7 @@ type PuzzleCheckResponse = {
 function QuestForgeGame() {
   const toolInfo = useToolInfo<"quest-forge-game">();
   const gameData = toolInfo.responseMetadata?.gameData as GameData | undefined;
+  const t = getI18n(gameData?.language ?? "en");
   const sendFollowUpMessage = useSendFollowUpMessage();
   const [, setDisplayMode] = useDisplayMode();
 
@@ -200,6 +353,18 @@ function QuestForgeGame() {
       audio.play().catch(() => {});
     },
     [isMuted]
+  );
+
+  // Play a one-shot SFX (fire-and-forget, no ref tracking)
+  const playSfx = useCallback(
+    (key: keyof NonNullable<GameData["sfx"]>) => {
+      const url = gameData?.sfx?.[key];
+      if (!url || isMuted) return;
+      const audio = new Audio(url);
+      audio.volume = 0.6;
+      audio.play().catch(() => {});
+    },
+    [gameData?.sfx, isMuted]
   );
 
   // Sync mute state to active audio elements
@@ -275,6 +440,8 @@ function QuestForgeGame() {
     async (exit: SceneExit) => {
       if (!gameData || isGeneratingScene) return;
 
+      playSfx("transition");
+
       try {
         const result = await callToolAsync({
           gameId: gameData.gameId,
@@ -327,43 +494,44 @@ function QuestForgeGame() {
         // Send puzzle or normal message
         if (scene.puzzle) {
           sendFollowUpMessage(
-            `[PUZZLE MODE] ${speakingNpcName} soumet le joueur à l'épreuve "${scene.puzzle.title}".\n` +
-            `Contexte: ${scene.puzzle.description}\n` +
-            `Tu NE CONNAIS PAS la réponse. Tu as UNIQUEMENT ces indices à donner UN PAR UN:\n` +
+            `[PUZZLE MODE] ${speakingNpcName} presents the challenge "${scene.puzzle.title}" to the player.\n` +
+            `Context: ${scene.puzzle.description}\n` +
+            `You do NOT know the answer. You ONLY have these hints to give ONE BY ONE:\n` +
             scene.puzzle.hints.map((h: string, i: number) => `  ${i + 1}. ${h}`).join("\n") + "\n" +
-            `RÈGLES: Refuse TOUJOURS de donner la réponse. UN indice par message. 2-3 lignes MAX. Reste dans le personnage.`
+            `RULES: ALWAYS refuse to give the answer. ONE hint per message. 2-3 lines MAX. Stay in character.`
           );
         } else if (!isEnding) {
           sendFollowUpMessage(
-            `[Scene ${scene.sequenceNumber}] Le joueur entre dans la scene.\n` +
-            `Reponds en tant que ${speakingNpcName} a cette nouvelle situation.`
+            `[Scene ${scene.sequenceNumber}] The player enters the scene.\n` +
+            `Respond as ${speakingNpcName} to this new situation.`
           );
         }
       } catch (error) {
         console.error("Failed to generate scene:", error);
         sendFollowUpMessage(
-          `[Erreur] La generation de la scene suivante a echoue. Le joueur peut reessayer son choix.`
+          `[Error] Failed to generate the next scene. The player can retry their choice.`
         );
       }
     },
-    [gameData, isGeneratingScene, callToolAsync, gameState, sendFollowUpMessage, setGameState, playAudio]
+    [gameData, isGeneratingScene, callToolAsync, gameState, sendFollowUpMessage, setGameState, playAudio, playSfx]
   );
 
   // Handle start game
   const handleStart = useCallback(() => {
+    playSfx("click");
     setDisplayMode("fullscreen");
     transitionTo("intro");
-  }, [setDisplayMode, transitionTo]);
+  }, [playSfx, setDisplayMode, transitionTo]);
 
   // Handle intro complete
   const handleIntroComplete = useCallback(() => {
     transitionTo("game");
     // Send initial scene context to LLM
     if (gameData) {
-      const npcName = gameData.speakingNpcName ?? "le PNJ";
+      const npcName = gameData.speakingNpcName ?? "the NPC";
       sendFollowUpMessage(
-        `[Scene 1] Le joueur entre dans la scene.\n` +
-        `Reponds en tant que ${npcName} a cette nouvelle situation.`
+        `[Scene 1] The player enters the scene.\n` +
+        `Respond as ${npcName} to this new situation.`
       );
     }
   }, [transitionTo, gameData, sendFollowUpMessage]);
@@ -385,16 +553,18 @@ function QuestForgeGame() {
         const { result: puzzleResult, consequence, attemptsLeft } = result.structuredContent;
 
         if (puzzleResult === "success") {
+          playSfx("success");
           sendFollowUpMessage(
-            `[PUZZLE RÉUSSI] Le joueur a résolu l'épreuve "${puzzle.title}". Félicite-le brièvement en 1-2 lignes en tant que ${gameState.speakingNpcName}.`
+            `[PUZZLE SOLVED] The player solved the challenge "${puzzle.title}". Congratulate them briefly in 1-2 lines as ${gameState.speakingNpcName}.`
           );
           setGameState((prev) => ({ ...prev, screen: "game" }));
         } else if (puzzleResult === "failure") {
+          playSfx("failure");
           if (consequence === "death") {
             setGameState((prev) => ({ ...prev, screen: "death" }));
           } else {
             sendFollowUpMessage(
-              `[PUZZLE ÉCHOUÉ] Le joueur a échoué l'épreuve. Exprime ta déception en 1-2 lignes en tant que ${gameState.speakingNpcName}.`
+              `[PUZZLE FAILED] The player failed the challenge. Express your disappointment in 1-2 lines as ${gameState.speakingNpcName}.`
             );
             setGameState((prev) => ({
               ...prev,
@@ -403,6 +573,7 @@ function QuestForgeGame() {
             }));
           }
         } else if (puzzleResult === "wrong") {
+          playSfx("failure");
           setGameState((prev) => ({
             ...prev,
             puzzleAttempts: attemptsLeft ?? prev.puzzleAttempts - 1,
@@ -412,7 +583,7 @@ function QuestForgeGame() {
         console.error("Puzzle check failed:", error);
       }
     },
-    [gameData, isCheckingPuzzle, checkPuzzle, gameState, sendFollowUpMessage, setGameState]
+    [gameData, isCheckingPuzzle, checkPuzzle, gameState, sendFollowUpMessage, setGameState, playSfx]
   );
 
   // Handle puzzle retry from death screen
@@ -442,7 +613,7 @@ function QuestForgeGame() {
   if (!gameData || !gameState._initialized) {
     return (
       <div className="vn-widget flex items-center justify-center">
-        <div className="text-[#c4a747] text-lg animate-pulse">Chargement...</div>
+        <div className="text-[#c4a747] text-lg animate-pulse">{t.loading}</div>
       </div>
     );
   }
@@ -453,20 +624,24 @@ function QuestForgeGame() {
   return (
     <div
       className="vn-widget"
-      data-llm={`Jeu: ${gameData.title} | Scene ${gameState.sceneCount}/6 | Lieu: ${scene.setting} | PNJ: ${speakingNpcName} | Confiance: ${gameState.trustLevel}/10`}
+      data-llm={`Game: ${gameData.title} | Scene ${gameState.sceneCount}/6 | Location: ${scene.setting} | NPC: ${speakingNpcName} | Trust: ${gameState.trustLevel}/10`}
     >
       {gameState.screen === "title" && (
         <TitleScreen
           gameData={gameData}
           onStart={handleStart}
           isTransitioning={isTransitioning}
+          t={t}
         />
       )}
       {gameState.screen === "intro" && (
         <IntroScreen
           introNarration={gameData.introNarration}
+          introAudioUrl={gameData.introAudioUrl}
+          isMuted={isMuted}
           onComplete={handleIntroComplete}
           isTransitioning={isTransitioning}
+          t={t}
         />
       )}
       {gameState.screen === "game" && (
@@ -477,6 +652,8 @@ function QuestForgeGame() {
           onEndStory={() => transitionTo("end")}
           isTransitioning={isTransitioning}
           isGeneratingScene={isGeneratingScene}
+          playSfx={playSfx}
+          t={t}
         />
       )}
       {gameState.screen === "puzzle" && (
@@ -486,6 +663,8 @@ function QuestForgeGame() {
           onSubmitAnswer={handlePuzzleSubmit}
           isChecking={isCheckingPuzzle}
           isTransitioning={isTransitioning}
+          playSfx={playSfx}
+          t={t}
         />
       )}
       {gameState.screen === "death" && (
@@ -494,6 +673,8 @@ function QuestForgeGame() {
           gameState={gameState}
           onRetry={handlePuzzleRetry}
           isTransitioning={isTransitioning}
+          playSfx={playSfx}
+          t={t}
         />
       )}
       {gameState.screen === "end" && (
@@ -501,6 +682,7 @@ function QuestForgeGame() {
           gameData={gameData}
           gameState={gameState}
           isTransitioning={isTransitioning}
+          t={t}
         />
       )}
 
@@ -510,7 +692,7 @@ function QuestForgeGame() {
           onClick={() => setIsMuted((prev) => !prev)}
           className="audio-toggle-btn"
           aria-label={isMuted ? "Unmute audio" : "Mute audio"}
-          title={isMuted ? "Activer le son" : "Couper le son"}
+          title={isMuted ? t.enableSound : t.muteSound}
         >
           {isMuted ? (
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -539,10 +721,12 @@ function TitleScreen({
   gameData,
   onStart,
   isTransitioning,
+  t,
 }: {
   gameData: GameData;
   onStart: () => void;
   isTransitioning: boolean;
+  t: I18nStrings;
 }) {
   return (
     <div className={`screen-enter w-full h-full relative overflow-hidden rounded-2xl ${isTransitioning ? "opacity-0 scale-95" : ""} transition-all duration-400`}>
@@ -596,7 +780,7 @@ function TitleScreen({
           onClick={onStart}
           className="button-pulse px-8 py-3 bg-gradient-to-r from-[#c4a747]/20 to-[#c4a747]/10 border-2 border-[#c4a747]/60 rounded-lg text-[#f0e6d0] font-bold uppercase tracking-wider hover:bg-[#c4a747]/30 transition-all"
         >
-          Commencer l&apos;Aventure
+          {t.startAdventure}
         </button>
       </div>
     </div>
@@ -609,19 +793,42 @@ function TitleScreen({
 
 function IntroScreen({
   introNarration,
+  introAudioUrl,
+  isMuted,
   onComplete,
   isTransitioning,
+  t,
 }: {
   introNarration: string;
+  introAudioUrl?: string | null;
+  isMuted: boolean;
   onComplete: () => void;
   isTransitioning: boolean;
+  t: I18nStrings;
 }) {
   const [showText, setShowText] = useState(false);
+  const introAudioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => setShowText(true), 500);
     return () => clearTimeout(timer);
   }, []);
+
+  // Play intro narration audio
+  useEffect(() => {
+    if (introAudioUrl && !isMuted) {
+      const audio = new Audio(introAudioUrl);
+      audio.volume = 0.9;
+      introAudioRef.current = audio;
+      audio.play().catch(() => {});
+    }
+    return () => {
+      if (introAudioRef.current) {
+        introAudioRef.current.pause();
+        introAudioRef.current.src = "";
+      }
+    };
+  }, [introAudioUrl, isMuted]);
 
   return (
     <div
@@ -641,7 +848,7 @@ function IntroScreen({
             {introNarration}
           </p>
           <div className="mt-8 text-[#c4a747]/60 text-sm animate-pulse">
-            Cliquez pour continuer
+            {t.clickToContinue}
           </div>
         </div>
       </div>
@@ -660,6 +867,8 @@ function GameScreen({
   onEndStory,
   isTransitioning,
   isGeneratingScene,
+  playSfx,
+  t,
 }: {
   gameData: GameData;
   gameState: GameState;
@@ -667,6 +876,8 @@ function GameScreen({
   onEndStory: () => void;
   isTransitioning: boolean;
   isGeneratingScene: boolean;
+  playSfx: (key: keyof NonNullable<GameData["sfx"]>) => void;
+  t: I18nStrings;
 }) {
   const scene = gameState.currentScene;
   const playerChar = gameData.playerCharacter;
@@ -691,7 +902,7 @@ function GameScreen({
       {isGeneratingScene && (
         <div className="absolute inset-0 z-40 bg-black/80 flex items-center justify-center">
           <div className="text-[#c4a747] animate-pulse text-lg">
-            La scene se transforme...
+            {t.sceneTransforming}
           </div>
         </div>
       )}
@@ -787,17 +998,17 @@ function GameScreen({
         <div className="max-w-3xl mx-auto">
           {scene.isEnding ? (
             <button
-              onClick={onEndStory}
+              onClick={() => { playSfx("click"); onEndStory(); }}
               className="w-full py-3 bg-gradient-to-r from-[#c4a747]/30 to-[#c4a747]/10 border-2 border-[#c4a747] rounded-lg text-[#f0e6d0] font-bold uppercase tracking-wider hover:bg-[#c4a747]/40 transition-all text-sm"
             >
-              Terminer l&apos;Histoire
+              {t.endStory}
             </button>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               {scene.exits.map((exit, idx) => (
                 <button
                   key={exit.id}
-                  onClick={() => onExitChoice(exit)}
+                  onClick={() => { playSfx("click"); onExitChoice(exit); }}
                   disabled={isGeneratingScene}
                   className="exit-choice-btn group relative overflow-hidden bg-black/70 backdrop-blur-sm border border-[#c4a747]/40 hover:border-[#c4a747] rounded-lg p-2.5 text-left transition-all duration-300 hover:bg-[#c4a747]/10 disabled:opacity-50 disabled:pointer-events-none"
                   style={{ animationDelay: `${idx * 100}ms` }}
@@ -817,7 +1028,7 @@ function GameScreen({
       {/* Scene Info Bar - Compact */}
       <div className="absolute top-3 right-3 z-20 flex items-center gap-2">
         <div className="bg-black/60 backdrop-blur-sm rounded-full px-2 py-0.5 flex items-center gap-1.5">
-          <span className="text-[#c4a747] text-[10px]">Confiance:</span>
+          <span className="text-[#c4a747] text-[10px]">{t.trust}</span>
           <div className="flex gap-0.5">
             {Array.from({ length: 10 }).map((_, i) => (
               <div
@@ -849,12 +1060,16 @@ function PuzzleScreen({
   onSubmitAnswer,
   isChecking,
   isTransitioning,
+  playSfx,
+  t,
 }: {
   gameData: GameData;
   gameState: GameState;
   onSubmitAnswer: (answer: string) => void;
   isChecking: boolean;
   isTransitioning: boolean;
+  playSfx: (key: keyof NonNullable<GameData["sfx"]>) => void;
+  t: I18nStrings;
 }) {
   const [answer, setAnswer] = useState("");
   const [codeChars, setCodeChars] = useState<string[]>([]);
@@ -891,6 +1106,7 @@ function PuzzleScreen({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    playSfx("click");
     if (puzzle.type === "lock_code") {
       const code = codeChars.join("");
       if (code.length === (puzzle.codeLength ?? 4) && !isChecking) {
@@ -1001,7 +1217,7 @@ function PuzzleScreen({
               type="text"
               value={answer}
               onChange={(e) => setAnswer(e.target.value)}
-              placeholder="Votre réponse..."
+              placeholder={t.yourAnswer}
               disabled={isChecking}
               className="puzzle-input w-full bg-black/60 border border-[#c4a747]/30 rounded-lg px-3 py-2 text-[#f0e6d0] text-sm placeholder-[#8a8a9a]/50 focus:outline-none focus:border-[#c4a747] transition-colors"
             />
@@ -1063,7 +1279,7 @@ function PuzzleScreen({
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <span className="text-lg">{themeIcon}</span>
-              <span className="text-[#c4a747] text-xs uppercase tracking-wider font-bold">Épreuve</span>
+              <span className="text-[#c4a747] text-xs uppercase tracking-wider font-bold">{t.challenge}</span>
               <span className="text-[#f0e6d0] text-sm font-bold">{puzzle.title}</span>
             </div>
             <div className="flex gap-1">
@@ -1088,14 +1304,14 @@ function PuzzleScreen({
           {/* Submit button */}
           <div className="flex items-center justify-between">
             <p className="text-[#8a8a9a] text-[10px] italic flex-1">
-              Parlez au PNJ dans le chat pour obtenir des indices
+              {t.talkToNpc}
             </p>
             <button
               type="submit"
               disabled={isSubmitDisabled()}
               className="px-5 py-2 bg-[#c4a747]/20 border border-[#c4a747]/60 rounded-lg text-[#f0e6d0] text-sm font-bold uppercase tracking-wider hover:bg-[#c4a747]/30 transition-all disabled:opacity-40 disabled:pointer-events-none"
             >
-              {isChecking ? "..." : "Valider"}
+              {isChecking ? "..." : t.submit}
             </button>
           </div>
         </form>
@@ -1104,7 +1320,7 @@ function PuzzleScreen({
       {/* Scene Info Bar */}
       <div className="absolute top-3 right-3 z-20 flex items-center gap-2">
         <div className="bg-black/60 backdrop-blur-sm rounded-full px-2 py-0.5 flex items-center gap-1.5">
-          <span className="text-[#c4a747] text-[10px]">Confiance:</span>
+          <span className="text-[#c4a747] text-[10px]">{t.trust}</span>
           <div className="flex gap-0.5">
             {Array.from({ length: 10 }).map((_, i) => (
               <div key={i} className={`w-1 h-2 rounded-sm ${i < gameState.trustLevel ? "bg-[#c4a747]" : "bg-[#8a8a9a]/30"}`} />
@@ -1128,11 +1344,15 @@ function DeathScreen({
   gameState,
   onRetry,
   isTransitioning,
+  playSfx,
+  t,
 }: {
   gameData: GameData;
   gameState: GameState;
   onRetry: () => void;
   isTransitioning: boolean;
+  playSfx: (key: keyof NonNullable<GameData["sfx"]>) => void;
+  t: I18nStrings;
 }) {
   void _gameData;
   const scene = gameState.currentScene;
@@ -1146,20 +1366,17 @@ function DeathScreen({
       <div className="relative z-10 h-full flex flex-col items-center justify-center p-6 text-center">
         <div className="text-6xl mb-4">☠️</div>
         <h2 className="text-3xl md:text-4xl font-bold text-red-400 mb-4">
-          Vous avez échoué
+          {t.youFailed}
         </h2>
         <p className="text-[#f0e6d0] text-sm md:text-base mb-2 max-w-md italic">
-          {puzzle ? `L'épreuve "${puzzle.title}" vous a été fatale.` : "L'aventure s'arrête ici."}
-        </p>
-        <p className="text-[#8a8a9a] text-xs mb-8 max-w-md">
-          Les ténèbres vous engloutissent... mais peut-être qu&apos;une autre tentative changera votre destin.
+          {puzzle ? t.challengeFatal(puzzle.title) : t.adventureEndsHere}
         </p>
 
         <button
-          onClick={onRetry}
+          onClick={() => { playSfx("click"); onRetry(); }}
           className="px-8 py-3 bg-gradient-to-r from-red-900/40 to-red-800/20 border-2 border-red-400/60 rounded-lg text-[#f0e6d0] font-bold uppercase tracking-wider hover:bg-red-800/40 transition-all"
         >
-          ↻ Retenter l&apos;épreuve
+          {t.retryChallenge}
         </button>
       </div>
     </div>
@@ -1174,18 +1391,20 @@ function EndScreen({
   gameData,
   gameState,
   isTransitioning,
+  t,
 }: {
   gameData: GameData;
   gameState: GameState;
   isTransitioning: boolean;
+  t: I18nStrings;
 }) {
   const sendFollowUpMessage = useSendFollowUpMessage();
 
   useEffect(() => {
-    const npcName = gameState.speakingNpcName || "le narrateur";
+    const npcName = gameState.speakingNpcName || "the narrator";
     sendFollowUpMessage(
-      `L'histoire "${gameData.title}" est terminee apres ${gameState.sceneCount} scenes. ` +
-      `Donne une conclusion narrative en tant que ${npcName}.`
+      `The story "${gameData.title}" has ended after ${gameState.sceneCount} scenes. ` +
+      `Give a narrative conclusion as ${npcName}.`
     );
   }, [gameData.title, gameState.sceneCount, gameState.speakingNpcName, sendFollowUpMessage]);
 
@@ -1203,7 +1422,7 @@ function EndScreen({
       {/* Content */}
       <div className="relative z-10 h-full flex flex-col items-center justify-center p-6 text-center">
         <h2 className="text-4xl md:text-5xl font-bold text-[#c4a747] mb-4 title-glow">
-          Fin de l&apos;Aventure
+          {t.endOfAdventure}
         </h2>
 
         <p className="text-[#f0e6d0] text-lg md:text-xl mb-8 max-w-md">
@@ -1214,16 +1433,16 @@ function EndScreen({
         <div className="grid grid-cols-2 gap-6 mb-8">
           <div className="bg-black/60 backdrop-blur-sm rounded-lg p-4 border border-[#c4a747]/30">
             <div className="text-3xl font-bold text-[#c4a747]">{gameState.sceneCount}</div>
-            <div className="text-[#8a8a9a] text-sm">Scenes vecues</div>
+            <div className="text-[#8a8a9a] text-sm">{t.scenesLived}</div>
           </div>
           <div className="bg-black/60 backdrop-blur-sm rounded-lg p-4 border border-[#c4a747]/30">
             <div className="text-3xl font-bold text-[#c4a747]">{gameState.trustLevel}/10</div>
-            <div className="text-[#8a8a9a] text-sm">Confiance finale</div>
+            <div className="text-[#8a8a9a] text-sm">{t.finalTrust}</div>
           </div>
         </div>
 
         <p className="text-[#8a8a9a] text-sm italic max-w-md">
-          L&apos;histoire se termine ici, mais les consequences de vos choix perdurent...
+          {t.endingMessage}
         </p>
       </div>
     </div>
