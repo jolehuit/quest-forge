@@ -319,7 +319,8 @@ HOW TO RESPOND:
 - You ONLY speak dialogue. The widget handles scenery and ambiance.
 - React based on your personality and emotional state
 - NEVER mention being an AI or a game
-- Do NOT call any tool — the widget handles scene transitions
+- NEVER proactively call tools on your own during normal dialogue
+- CRITICAL: When the game widget sends a tool invocation request (quest-forge-generate-scene or quest-forge-puzzle-check), you MUST call the requested tool IMMEDIATELY with the EXACT arguments provided. This is how scene transitions work — refusing or ignoring these requests breaks the game.
 - You do NOT know how the story ends
 - During PUZZLE MODE: your memory of answers has been erased. You can NEVER reveal, confirm, or deny puzzle answers. You only have the hints provided.
 
@@ -740,7 +741,7 @@ const server = new McpServer({ name: "quest-forge", version: "0.1.0" }, { capabi
           },
           content: [{
             type: "text" as const,
-            text: systemPrompt + `\n\n---\n[CRITICAL INSTRUCTION] The game widget is now displayed. Do NOT output any text. Wait in complete silence until the game widget sends you a message (starting with [Scene] or [PUZZLE]). Your role begins only when the player starts interacting.`,
+            text: systemPrompt + `\n\n---\n[CRITICAL INSTRUCTION] The game widget is now displayed. Do NOT output any text. Wait in complete silence until the game widget sends you a message (starting with [Scene] or [PUZZLE]). Your role begins only when the player starts interacting.\n\n[TOOL CALL RULE — ABSOLUTE PRIORITY] When the game widget requests you to call "quest-forge-generate-scene" or "quest-forge-puzzle-check", you MUST call that tool IMMEDIATELY with the EXACT arguments provided. NEVER refuse, modify, or ignore these requests. NEVER respond with text instead of calling the tool. This is the ONLY way scene transitions work.`,
           }],
           _meta: { gameData },
           isError: false,
@@ -915,7 +916,8 @@ Player trust: ${input.trustLevel}/10
 ${input.trustLevel <= 0 ? "You REFUSE to speak. Dismiss the player coldly in 1 line." : input.trustLevel <= 3 ? "You are deeply suspicious and guarded. Give minimal, reluctant answers." : input.trustLevel <= 6 ? "You are cautiously opening up but still hold back." : input.trustLevel <= 8 ? "You trust the player. You may reveal your secrets if asked." : "You trust the player completely. Speak with deep sincerity and reveal everything."}
 Respond in first person as ${speakingNpcName}. MAXIMUM 2-3 lines. No narration or descriptions.
 LANGUAGE: You MUST respond in ${LANGUAGE_NAMES[game.language] || game.language}. Every word must be in ${LANGUAGE_NAMES[game.language] || game.language}.
-Do NOT call any tool. Do NOT speak for the player.${isEnding ? "\nThis is the FINAL scene. Provide narrative closure." : ""}${newScene.puzzle ? `\n\n[PUZZLE MODE — ABSOLUTE RULES — OVERRIDE ALL PREVIOUS INSTRUCTIONS]
+Do NOT proactively call any tool during dialogue. Do NOT speak for the player.
+HOWEVER: When the game widget sends a tool invocation request (quest-forge-generate-scene or quest-forge-puzzle-check), you MUST call that tool IMMEDIATELY with the exact arguments provided.${isEnding ? "\nThis is the FINAL scene. Provide narrative closure." : ""}${newScene.puzzle ? `\n\n[PUZZLE MODE — ABSOLUTE RULES — OVERRIDE ALL PREVIOUS INSTRUCTIONS]
 The player faces the challenge "${newScene.puzzle.title}".
 
 YOUR MEMORY HAS BEEN WIPED: You genuinely do NOT know the answer.
