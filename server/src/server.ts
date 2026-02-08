@@ -559,9 +559,9 @@ const server = new McpServer({ name: "quest-forge", version: "0.1.0" }, { capabi
 
         // Generate TTS narration for the initial scene
         const voiceId = getNarratorVoice(input.language);
-        const narrationAudioUrl = await generateTTS(initialScene.narration.text, voiceId);
+        const narrationAudioBase64 = await generateTTS(initialScene.narration.text, voiceId);
         const musicTrackKey = getMusicTrackForMood(initialScene.narration.mood);
-        const musicAudioUrl = musicTracks.get(musicTrackKey) ?? musicTracks.values().next().value ?? null;
+        const musicAudioBase64 = musicTracks.get(musicTrackKey) ?? musicTracks.values().next().value ?? null;
 
         // Build game data for widget
         const gameData = {
@@ -590,8 +590,8 @@ const server = new McpServer({ name: "quest-forge", version: "0.1.0" }, { capabi
           })),
           currentScene: initialScene,
           introNarration: input.introNarration,
-          narrationAudioUrl,
-          musicAudioUrl,
+          narrationAudioBase64,
+          musicAudioBase64,
         };
 
         // Build system prompt focused on ONE NPC
@@ -759,9 +759,9 @@ const server = new McpServer({ name: "quest-forge", version: "0.1.0" }, { capabi
 
         // Generate TTS narration for the new scene
         const voiceId = getNarratorVoice(game.language);
-        const narrationAudioUrl = await generateTTS(newScene.narration.text, voiceId);
+        const narrationAudioBase64 = await generateTTS(newScene.narration.text, voiceId);
         const musicTrackKey = getMusicTrackForMood(newScene.narration.mood);
-        const musicAudioUrl = game.musicTracks.get(musicTrackKey) ?? game.musicTracks.values().next().value ?? null;
+        const musicAudioBase64 = game.musicTracks.get(musicTrackKey) ?? game.musicTracks.values().next().value ?? null;
 
         // Find the speaking NPC details
         const speakingNpc = game.story.npcs.find(n => n.id === nextSceneData.speakingNPCId);
@@ -800,8 +800,8 @@ INTERDICTIONS (violation = échec du jeu):
         return {
           structuredContent: {
             scene: newScene,
-            narrationAudioUrl,
-            musicAudioUrl,
+            narrationAudioBase64,
+            musicAudioBase64,
             speakingNpcId: nextSceneData.speakingNPCId,
             speakingNpcName,
             sceneCount: newSceneCount,
