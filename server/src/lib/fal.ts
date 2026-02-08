@@ -23,6 +23,53 @@ export async function generateCharacterPortrait(
 }
 
 /**
+ * Check if a URL points to a valid and accessible image
+ */
+async function isImageUrlValid(imageUrl: string): Promise<boolean> {
+  try {
+    const response = await fetch(imageUrl, { method: "HEAD", signal: AbortSignal.timeout(5000) });
+    if (!response.ok) return false;
+    const contentType = response.headers.get("content-type");
+    return contentType ? contentType.startsWith("image/") : false;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Transform a reference image into a character portrait using Fal AI (img2img)
+ * Falls back to txt2img if the reference URL is invalid or inaccessible
+ */
+export async function transformCharacterPortrait(
+  imageUrl: string,
+  appearance: string,
+  style: string,
+): Promise<string> {
+  // First, validate that the URL is actually accessible
+  const isValid = await isImageUrlValid(imageUrl);
+  if (!isValid) {
+    console.warn(`Reference image URL invalid or inaccessible: ${imageUrl}. Falling back to txt2img.`);
+    return generateCharacterPortrait(appearance, style);
+  }
+
+  try {
+    const result = await fal.subscribe("fal-ai/flux-2/edit", {
+      input: {
+        prompt: `${appearance}, ${style}, portrait, character art, high quality, detailed`,
+        image_urls: [imageUrl],
+        image_size: "portrait_4_3",
+        num_inference_steps: 28,
+        output_format: "png",
+      },
+    });
+    return result.data?.images?.[0]?.url || getPlaceholderImage("portrait", "Character");
+  } catch (error) {
+    console.error("Failed to transform character portrait:", error);
+    return getPlaceholderImage("portrait", "Character");
+  }
+}
+
+/**
  * Generate a scene background using Fal AI
  */
 export async function generateSceneBackground(

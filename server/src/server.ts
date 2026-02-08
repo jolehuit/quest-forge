@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { McpServer } from "skybridge/server";
 import { z } from "zod";
-import { generateCharacterPortrait, generateSceneBackground } from "./lib/fal.js";
+import { generateCharacterPortrait, generateSceneBackground, transformCharacterPortrait } from "./lib/fal.js";
 import { generateTTS, getNarratorVoice, generateMusicTracks, getMusicTrackForMood } from "./lib/audio.js";
 
 // ═══════════════════════════════════════════════════════════
@@ -38,6 +38,12 @@ const CharacterSchema = z.object({
     content: z.string(),
     unlockCondition: z.string(),
   })).optional().describe("Secrets this character hides"),
+  referenceImageUrl: z.union([z.string().url(), z.literal("")]).optional().describe(
+    "URL of a reference image uploaded by the user for this character. " +
+    "ONLY provide this if the user explicitly uploaded reference images via quest-forge-upload. " +
+    "If the user did NOT upload any images, OMIT this field completely (do NOT set it to null or empty string). " +
+    "If provided, the portrait will be generated using img2img."
+  ),
 });
 
 // Player character extends base character
@@ -227,6 +233,15 @@ EXIT FORMAT:
 - Each exit includes a nextScene object with setting, mood, situation, presentNPCIds, speakingNPCId
 - This data is used by the server to build the next scene without calling the LLM
 - Write rich, evocative situations (2-3 sentences) and specific settings for good Fal AI backgrounds
+
+REFERENCE IMAGES (CRITICAL):
+- Characters can have an optional referenceImageUrl field - BUT ONLY if the user actually uploaded images
+- BEFORE calling this tool, you MUST ask: "Would you like to upload reference images for the characters?"
+- If the user says YES → call quest-forge-upload first → wait for follow-up message with URLs → use those URLs
+- If the user says NO or doesn't mention images → do NOT include referenceImageUrl for ANY character
+- For characters WITHOUT a reference image: completely OMIT the referenceImageUrl field (don't set to null or empty string)
+- NEVER invent or hallucinate image URLs - only use URLs provided by the upload widget
+- If an invalid URL is provided, the system will automatically fall back to normal generation
 
 IMPORTANT: After calling this tool, do NOT output any text. The game widget handles everything. Wait in silence until the game sends you a message.`;
 
@@ -481,6 +496,47 @@ const SHARED_CSP = {
 
 const server = new McpServer({ name: "quest-forge", version: "0.1.0" }, { capabilities: {} })
   // ═══════════════════════════════════════════════════════════
+  // Tool: quest-forge-upload (reference image upload widget)
+  // ═══════════════════════════════════════════════════════════
+  .registerWidget(
+    "quest-forge-upload",
+    {
+      description: "Quest Forge — Upload Reference Images",
+      _meta: {
+        ui: { csp: SHARED_CSP },
+      },
+    },
+    {
+      description:
+        "Show the reference image upload widget. Call this ONLY when the user explicitly wants to provide reference images for characters. " +
+        "After the upload is complete, the widget will send a follow-up message with the image URLs. " +
+        "Use those URLs as referenceImageUrl for matching characters when calling quest-forge-game. " +
+        "Do NOT call this if the user declines to provide reference images.",
+      inputSchema: {},
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
+      _meta: {
+        "openai/toolInvocation/invoking": "Preparing upload widget...",
+        "openai/toolInvocation/invoked": "Upload widget ready!",
+      },
+    },
+    async () => {
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: "The reference image upload widget is now displayed. Wait for the user to upload images and click Done. The widget will send a follow-up message with the URLs.",
+          },
+        ],
+        isError: false,
+      };
+    },
+  )
+
+  // ═══════════════════════════════════════════════════════════
   // Tool: quest-forge-game (create & play narrative visual novel)
   // ═══════════════════════════════════════════════════════════
   .registerWidget(
@@ -513,7 +569,9 @@ const server = new McpServer({ name: "quest-forge", version: "0.1.0" }, { capabi
 
         const portraitGeneration = Promise.all(
           allCharacters.map(async (char) => {
-            const url = await generateCharacterPortrait(char.appearance, input.style);
+            const url = char.referenceImageUrl?.trim()
+              ? await transformCharacterPortrait(char.referenceImageUrl, char.appearance, input.style)
+              : await generateCharacterPortrait(char.appearance, input.style);
             characterPortraits.set(char.id, url);
           })
         );

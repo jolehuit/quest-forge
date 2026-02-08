@@ -545,3 +545,40 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ═══════════════════════════════════════
+   UPLOAD WIDGET STYLES
+   ═══════════════════════════════════════ */
+
+/* Upload drop zone */
+.upload-zone {
+  border: 2px dashed rgba(196, 167, 71, 0.3);
+  background: rgba(10, 10, 15, 0.8);
+  transition: all 0.2s ease;
+}
+
+.upload-zone:hover {
+  border-color: rgba(196, 167, 71, 0.5);
+  background: rgba(196, 167, 71, 0.05);
+}
+
+.upload-zone.dragover {
+  border-color: #c4a747;
+  background: rgba(196, 167, 71, 0.1);
+  transform: scale(1.01);
+}
+
+/* Image card in upload grid */
+.upload-image-card {
+  position: relative;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  border: 1px solid rgba(196, 167, 71, 0.2);
+  background: #12121a;
+  transition: all 0.2s ease;
+}
+
+.upload-image-card:hover {
+  border-color: rgba(196, 167, 71, 0.4);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
