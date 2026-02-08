@@ -1,13 +1,11 @@
 /**
- * Audio generation utilities — TTS via Gradium, music via Fal Sonauto V2
- * TTS files are uploaded to Cloudflare R2 and served via public URL.
- * Music files are served directly from Fal/Sonauto CDN.
- * Both are optional: functions return null if API keys or config are missing.
+ * Audio generation utilities — TTS via Gradium, music via ElevenLabs
+ * Audio files are uploaded to Cloudflare R2 and served via public URL.
+ * Both are optional: functions return null if API keys or R2 config are missing.
  */
 
 import crypto from "node:crypto";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
-import { fal } from "@fal-ai/client";
 
 // ═══════════════════════════════════════════════════════════
 // R2 client (lazy init — only created if env vars are set)
@@ -96,37 +94,44 @@ export async function generateTTS(
 }
 
 // ═══════════════════════════════════════════════════════════
-// Music — Fal Sonauto V2
+// Music — ElevenLabs API (max 3 concurrent)
 // ═══════════════════════════════════════════════════════════
 
-async function generateMusic(
-  tags: string[],
+export async function generateMusic(
+  prompt: string,
+  durationMs: number = 15000,
 ): Promise<string | null> {
-  try {
-    const result = await fal.subscribe("sonauto/v2/text-to-music", {
-      input: {
-        tags,
-        lyrics_prompt: "", // empty = instrumental only
-        output_format: "mp3",
-        output_bit_rate: 128 as unknown as "128", // API expects number despite SDK types
-        num_songs: 1,
-        prompt_strength: 2,
-        balance_strength: 0.3, // sharper instrumentals
-      },
-    });
+  const apiKey = process.env.ELEVENLABS_API_KEY;
+  if (!apiKey) return null;
 
-    // Audio can be an array or a single object depending on num_songs
-    const audio = result.data?.audio;
-    const audioUrl = Array.isArray(audio) ? audio[0]?.url : (audio as { url?: string })?.url;
-    if (!audioUrl) {
-      console.error("Sonauto: no audio URL in response");
+  try {
+    const response = await fetch(
+      "https://api.elevenlabs.io/v1/music?output_format=mp3_22050_32",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "xi-api-key": apiKey,
+        },
+        body: JSON.stringify({
+          prompt,
+          music_length_ms: durationMs,
+          model_id: "music_v1",
+          force_instrumental: true,
+        }),
+      },
+    );
+
+    if (!response.ok) {
+      console.error(`ElevenLabs music error: ${response.status} ${response.statusText}`);
       return null;
     }
 
-    return audioUrl;
-  } catch (error: unknown) {
-    const body = (error as { body?: unknown })?.body;
-    console.error("Failed to generate music:", error, body ? JSON.stringify(body) : "");
+    const buffer = Buffer.from(await response.arrayBuffer());
+    const key = `audio/music-${crypto.randomUUID()}.mp3`;
+    return await uploadToR2(buffer, key, "audio/mpeg");
+  } catch (error) {
+    console.error("Failed to generate music:", error);
     return null;
   }
 }
@@ -151,64 +156,37 @@ export function getNarratorVoice(
 }
 
 // ═══════════════════════════════════════════════════════════
-// Music track generation — sequential to respect Fal concurrency
+// Music track generation (3 tracks = ElevenLabs concurrency limit)
 // ═══════════════════════════════════════════════════════════
-
-// Map free-text tone descriptions to valid Sonauto tags
-// (tone comes from the LLM and can be in any language)
-const TONE_TO_TAGS: Record<string, string[]> = {
-  dark: ["dark", "melancholic"],
-  heroic: ["energetic", "uplifting"],
-  mysterious: ["ethereal", "mysterious"],
-  hopeful: ["uplifting", "warm"],
-  tense: ["dark", "atmospheric"],
-  somber: ["melancholic", "atmospheric"],
-  sombre: ["melancholic", "atmospheric"],
-  romantic: ["romantic", "passionate"],
-  playful: ["playful", "energetic"],
-  epic: ["energetic", "passionate"],
-  whimsical: ["playful", "quirky"],
-  melancholic: ["melancholic", "ethereal"],
-  warm: ["warm", "romantic"],
-};
-
-function toneToTags(tone: string): string[] {
-  const lower = tone.toLowerCase();
-  for (const [keyword, tags] of Object.entries(TONE_TO_TAGS)) {
-    if (lower.includes(keyword)) return tags;
-  }
-  return ["atmospheric"];
-}
 
 export async function generateMusicTracks(
   genres: string[],
   tone: string,
 ): Promise<Map<string, string>> {
   const tracks = new Map<string, string>();
-  const genre = genres[0] || "fantasy";
-  const toneTags = toneToTags(tone);
 
   const moods = [
     {
       key: "ambient",
-      tags: [...new Set([genre, ...toneTags, "ambient", "atmospheric", "instrumental"])],
+      prompt: `${tone} ${genres[0] || "fantasy"} instrumental background. Atmospheric, immersive, calm. No vocals. Loop-friendly.`,
     },
     {
       key: "tension",
-      tags: [genre, "dark", "melancholic", "atmospheric", "instrumental"],
+      prompt: `Dark ${genres[0] || "fantasy"} instrumental. Tense, ominous, suspenseful. No vocals. Loop-friendly.`,
     },
     {
       key: "emotional",
-      tags: [...new Set([genre, ...toneTags, "melodic", "uplifting", "warm", "instrumental"])],
+      prompt: `${tone} ${genres[0] || "fantasy"} instrumental. Hopeful, warm, emotional. No vocals. Loop-friendly.`,
     },
   ];
 
-  // Sequential to avoid hitting Fal concurrency limits
-  // (portraits already use parallel Fal calls)
-  for (const m of moods) {
-    const url = await generateMusic(m.tags);
-    if (url) tracks.set(m.key, url);
-  }
+  const results = await Promise.all(
+    moods.map((m) => generateMusic(m.prompt, 15000)),
+  );
+
+  moods.forEach((m, i) => {
+    if (results[i]) tracks.set(m.key, results[i]!);
+  });
 
   return tracks;
 }
