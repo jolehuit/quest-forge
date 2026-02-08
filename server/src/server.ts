@@ -387,6 +387,7 @@ const server = new McpServer({ name: "quest-forge", version: "0.1.0" }, { capabi
 
         // Build preview data
         const previewData = {
+          gameId,
           title: input.title,
           genre: input.genre,
           synopsis: input.synopsis,
@@ -415,8 +416,14 @@ const server = new McpServer({ name: "quest-forge", version: "0.1.0" }, { capabi
           content: [
             {
               type: "text" as const,
-              text: `Created "${input.title}" with ${allCharacters.length} characters. ` +
-                    `Call quest-forge-game with gameId "${gameId}" to start playing.`,
+              text: `🎮 **Histoire créée : "${input.title}"**
+
+✅ ${allCharacters.length} personnages générés avec portraits
+✅ Scène initiale prête
+
+**➡️ PROCHAIN ÉTAPE :** Tu dois appeler l'outil **quest-forge-game** avec le gameId "${gameId}" pour démarrer l'aventure et afficher l'interface de jeu.
+
+Ne propose pas de choix ici - le joueur interagira via le widget une fois le jeu lancé.`,
             },
           ],
           _meta: { previewData },
