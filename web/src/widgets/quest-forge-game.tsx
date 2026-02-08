@@ -1,6 +1,6 @@
 import "@/index.css";
 import { useCallback, useEffect, useState } from "react";
-import { mountWidget, useDisplayMode, useSendFollowUpMessage, useWidgetState } from "skybridge/web";
+import { mountWidget, useCallTool, useDisplayMode, useSendFollowUpMessage, useWidgetState } from "skybridge/web";
 import { useToolInfo } from "@/helpers";
 
 // ═══════════════════════════════════════
@@ -30,8 +30,14 @@ interface SceneCharacter {
 interface SceneExit {
   id: string;
   description: string;
-  prompt: string;
   icon?: string;
+  nextScene: {
+    setting: string;
+    mood: string;
+    situation: string;
+    presentNPCIds: string[];
+    speakingNPCId: string;
+  };
 }
 
 interface NarrativeScene {
@@ -48,6 +54,7 @@ interface NarrativeScene {
 }
 
 interface GameData {
+  gameId: string;
   title: string;
   genre: string[];
   synopsis: string;
@@ -63,6 +70,8 @@ interface GameData {
   characters: Character[];
   currentScene: NarrativeScene;
   introNarration: string;
+  speakingNpcId: string;
+  speakingNpcName: string;
 }
 
 type Screen = "title" | "intro" | "game" | "end";
@@ -71,12 +80,34 @@ interface GameState {
   [key: string]: unknown;
   screen: Screen;
   currentScene: NarrativeScene;
+  speakingNpcName: string;
   visitedSceneIds: string[];
   storyMemory: string[];
   trustLevel: number;
   sceneCount: number;
-  isGeneratingScene: boolean;
   _initialized: boolean;
+}
+
+// Types for useCallTool
+type GenerateSceneArgs = {
+  [key: string]: unknown;
+  gameId: string;
+  previousSceneId: string;
+  exitChoiceId: string;
+  storyMemory: string[];
+  trustLevel: number;
+  sceneCount: number;
+};
+
+interface GenerateSceneResponse {
+  structuredContent: {
+    scene: NarrativeScene;
+    speakingNpcName: string;
+    speakingNpcId: string;
+    sceneCount: number;
+    isEnding: boolean;
+    trustLevel: number;
+  };
 }
 
 // ═══════════════════════════════════════
@@ -89,14 +120,17 @@ function QuestForgeGame() {
   const sendFollowUpMessage = useSendFollowUpMessage();
   const [, setDisplayMode] = useDisplayMode();
 
+  const { callToolAsync, isPending: isGeneratingScene } =
+    useCallTool<GenerateSceneArgs, GenerateSceneResponse>("quest-forge-generate-scene");
+
   const [gameState, setGameState] = useWidgetState<GameState>({
     screen: "title",
     currentScene: {} as NarrativeScene,
+    speakingNpcName: "",
     visitedSceneIds: [],
     storyMemory: [],
     trustLevel: 5,
     sceneCount: 1,
-    isGeneratingScene: false,
     _initialized: false,
   });
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -107,11 +141,11 @@ function QuestForgeGame() {
       setGameState({
         screen: "title",
         currentScene: gameData.currentScene,
+        speakingNpcName: gameData.speakingNpcName ?? "",
         visitedSceneIds: [gameData.currentScene.id],
         storyMemory: [],
         trustLevel: 5,
         sceneCount: 1,
-        isGeneratingScene: false,
         _initialized: true,
       });
     }
@@ -132,33 +166,50 @@ function QuestForgeGame() {
   // Handle scene exit choice
   const handleExitChoice = useCallback(
     async (exit: SceneExit) => {
-      if (!gameState || gameState.isGeneratingScene) return;
+      if (!gameData || isGeneratingScene) return;
 
-      setGameState((prev) => ({ ...prev, isGeneratingScene: true }));
+      try {
+        const result = await callToolAsync({
+          gameId: gameData.gameId,
+          previousSceneId: gameState.currentScene.id,
+          exitChoiceId: exit.id,
+          storyMemory: gameState.storyMemory,
+          trustLevel: gameState.trustLevel,
+          sceneCount: gameState.sceneCount,
+        });
 
-      // Send message to LLM about the choice
-      sendFollowUpMessage(
-        `[CHOIX: ${exit.description}]\n` +
-        `Le joueur a choisi: "${exit.description}"\n` +
-        `Génère la réaction des PNJs à ce choix.`
-      );
+        const { scene, speakingNpcName, isEnding, trustLevel } = result.structuredContent;
 
-      // In a full implementation, this would call quest-forge-generate-scene
-      // For now, we simulate the transition
-      if (gameState.currentScene.isEnding || gameState.sceneCount >= 10) {
-        transitionTo("end");
-      } else {
-        // Simulate scene generation delay
+        // Visual transition
+        setIsTransitioning(true);
         setTimeout(() => {
           setGameState((prev) => ({
             ...prev,
-            isGeneratingScene: false,
-            // In real implementation, this would be the new scene from the server
+            currentScene: scene,
+            speakingNpcName,
+            sceneCount: prev.sceneCount + 1,
+            trustLevel,
+            visitedSceneIds: [...prev.visitedSceneIds, scene.id],
+            screen: isEnding ? "end" : prev.screen,
           }));
-        }, 1000);
+          setIsTransitioning(false);
+        }, 400);
+
+        // Make the NPC speak in the chat (EndScreen handles the ending message)
+        if (!isEnding) {
+          sendFollowUpMessage(
+            `[Scene ${scene.sequenceNumber}] Le joueur entre dans la scene.\n` +
+            `Reponds en tant que ${speakingNpcName} a cette nouvelle situation.`
+          );
+        }
+      } catch (error) {
+        console.error("Failed to generate scene:", error);
+        sendFollowUpMessage(
+          `[Erreur] La generation de la scene suivante a echoue. Le joueur peut reessayer son choix.`
+        );
       }
     },
-    [gameState, sendFollowUpMessage, transitionTo, setGameState]
+    [gameData, isGeneratingScene, callToolAsync, gameState, sendFollowUpMessage, setGameState]
   );
 
   // Handle start game
@@ -172,11 +223,10 @@ function QuestForgeGame() {
     transitionTo("game");
     // Send initial scene context to LLM
     if (gameData) {
+      const npcName = gameData.speakingNpcName ?? "le PNJ";
       sendFollowUpMessage(
-        `[SCÈNE: ${gameData.currentScene.id}]\n` +
-        `Narration: ${gameData.currentScene.narration.text}\n` +
-        `Situation: ${gameData.currentScene.situation}\n` +
-        `Décris l'entrée dans cette scène du point de vue des PNJs.`
+        `[Scene 1] Le joueur entre dans la scene.\n` +
+        `Reponds en tant que ${npcName} a cette nouvelle situation.`
       );
     }
   }, [transitionTo, gameData, sendFollowUpMessage]);
@@ -189,8 +239,14 @@ function QuestForgeGame() {
     );
   }
 
+  const scene = gameState.currentScene;
+  const speakingNpcName = gameState.speakingNpcName || gameData.speakingNpcName || "";
+
   return (
-    <div className="vn-widget">
+    <div
+      className="vn-widget"
+      data-llm={`Jeu: ${gameData.title} | Scene ${gameState.sceneCount}/10 | Lieu: ${scene.setting} | PNJ: ${speakingNpcName} | Confiance: ${gameState.trustLevel}/10`}
+    >
       {gameState.screen === "title" && (
         <TitleScreen
           gameData={gameData}
@@ -210,7 +266,9 @@ function QuestForgeGame() {
           gameData={gameData}
           gameState={gameState}
           onExitChoice={handleExitChoice}
+          onEndStory={() => transitionTo("end")}
           isTransitioning={isTransitioning}
+          isGeneratingScene={isGeneratingScene}
         />
       )}
       {gameState.screen === "end" && (
@@ -350,12 +408,16 @@ function GameScreen({
   gameData,
   gameState,
   onExitChoice,
+  onEndStory,
   isTransitioning,
+  isGeneratingScene,
 }: {
   gameData: GameData;
   gameState: GameState;
   onExitChoice: (exit: SceneExit) => void;
+  onEndStory: () => void;
   isTransitioning: boolean;
+  isGeneratingScene: boolean;
 }) {
   const scene = gameState.currentScene;
   const playerChar = gameData.playerCharacter;
@@ -368,7 +430,6 @@ function GameScreen({
   return (
     <div
       className={`screen-enter w-full h-full relative overflow-hidden rounded-2xl ${isTransitioning ? "opacity-0 scale-95" : ""} transition-all duration-400`}
-      data-llm={`Scène: ${scene.narration.text.slice(0, 100)}... | Personnages: ${npcs.map((n) => getCharacter(n.characterId)?.name).join(", ")}`}
     >
       {/* Background */}
       <div
@@ -376,6 +437,15 @@ function GameScreen({
         style={{ backgroundImage: `url(${scene.backgroundUrl})` }}
       />
       <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-black/60" />
+
+      {/* Loading overlay during scene generation */}
+      {isGeneratingScene && (
+        <div className="absolute inset-0 z-40 bg-black/80 flex items-center justify-center">
+          <div className="text-[#c4a747] animate-pulse text-lg">
+            La scene se transforme...
+          </div>
+        </div>
+      )}
 
       {/* ═══════════════════════════════════════
           TOP: NARRATION PANEL (Compact)
@@ -385,7 +455,7 @@ function GameScreen({
           <div className="bg-black/70 backdrop-blur-sm border border-[#c4a747]/30 rounded-lg p-3">
             <div className="flex items-center gap-2 mb-1">
               <span className="text-[#c4a747] text-[10px] uppercase tracking-wider font-bold">
-                Scène {scene.sequenceNumber}
+                Scene {scene.sequenceNumber}
               </span>
               <span className="text-[#8a8a9a] text-[10px]">•</span>
               <span className="text-[#8a8a9a] text-[10px] italic">{scene.narration.mood}</span>
@@ -466,18 +536,12 @@ function GameScreen({
          ═══════════════════════════════════════ */}
       <div className="absolute bottom-0 left-0 right-0 z-30 p-2">
         <div className="max-w-3xl mx-auto">
-          {gameState.isGeneratingScene ? (
-            <div className="bg-black/80 backdrop-blur-sm border border-[#c4a747]/30 rounded-lg p-2 text-center">
-              <div className="text-[#c4a747] animate-pulse text-xs">
-                Génération de la prochaine scène...
-              </div>
-            </div>
-          ) : scene.isEnding ? (
+          {scene.isEnding ? (
             <button
-              onClick={() => {/* Transition to end screen */}}
+              onClick={onEndStory}
               className="w-full py-3 bg-gradient-to-r from-[#c4a747]/30 to-[#c4a747]/10 border-2 border-[#c4a747] rounded-lg text-[#f0e6d0] font-bold uppercase tracking-wider hover:bg-[#c4a747]/40 transition-all text-sm"
             >
-              🏆 Terminer l&apos;Histoire
+              Terminer l&apos;Histoire
             </button>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -485,7 +549,8 @@ function GameScreen({
                 <button
                   key={exit.id}
                   onClick={() => onExitChoice(exit)}
-                  className="exit-choice-btn group relative overflow-hidden bg-black/70 backdrop-blur-sm border border-[#c4a747]/40 hover:border-[#c4a747] rounded-lg p-2.5 text-left transition-all duration-300 hover:bg-[#c4a747]/10"
+                  disabled={isGeneratingScene}
+                  className="exit-choice-btn group relative overflow-hidden bg-black/70 backdrop-blur-sm border border-[#c4a747]/40 hover:border-[#c4a747] rounded-lg p-2.5 text-left transition-all duration-300 hover:bg-[#c4a747]/10 disabled:opacity-50 disabled:pointer-events-none"
                   style={{ animationDelay: `${idx * 100}ms` }}
                 >
                   <div className="flex items-center gap-2">
@@ -541,12 +606,12 @@ function EndScreen({
   const sendFollowUpMessage = useSendFollowUpMessage();
 
   useEffect(() => {
+    const npcName = gameState.speakingNpcName || "le narrateur";
     sendFollowUpMessage(
-      `L'histoire "${gameData.title}" est terminée. ` +
-      `Le joueur a vécu ${gameState.sceneCount} scènes. ` +
-      `Donne une conclusion narrative appropriée.`
+      `L'histoire "${gameData.title}" est terminee apres ${gameState.sceneCount} scenes. ` +
+      `Donne une conclusion narrative en tant que ${npcName}.`
     );
-  }, [gameData.title, gameState.sceneCount, sendFollowUpMessage]);
+  }, [gameData.title, gameState.sceneCount, gameState.speakingNpcName, sendFollowUpMessage]);
 
   return (
     <div
@@ -573,7 +638,7 @@ function EndScreen({
         <div className="grid grid-cols-2 gap-6 mb-8">
           <div className="bg-black/60 backdrop-blur-sm rounded-lg p-4 border border-[#c4a747]/30">
             <div className="text-3xl font-bold text-[#c4a747]">{gameState.sceneCount}</div>
-            <div className="text-[#8a8a9a] text-sm">Scènes vécues</div>
+            <div className="text-[#8a8a9a] text-sm">Scenes vecues</div>
           </div>
           <div className="bg-black/60 backdrop-blur-sm rounded-lg p-4 border border-[#c4a747]/30">
             <div className="text-3xl font-bold text-[#c4a747]">{gameState.trustLevel}/10</div>
@@ -582,7 +647,7 @@ function EndScreen({
         </div>
 
         <p className="text-[#8a8a9a] text-sm italic max-w-md">
-          L&apos;histoire se termine ici, mais les conséquences de vos choix perdurent...
+          L&apos;histoire se termine ici, mais les consequences de vos choix perdurent...
         </p>
       </div>
     </div>

@@ -129,41 +129,6 @@
 }
 
 /* ========================================
-   DIALOGUE BOX
-   ======================================== */
-.dialogue-box {
-  background: linear-gradient(to bottom, rgba(10, 10, 30, 0.95), rgba(20, 15, 40, 0.97));
-  border: 3px solid #c4a747;
-  border-radius: 8px;
-  box-shadow:
-    inset 0 0 0 2px #1a1a2e,
-    inset 0 0 0 4px #c4a747,
-    0 8px 32px rgba(0, 0, 0, 0.5);
-  position: relative;
-}
-
-.dialogue-box::before {
-  content: "";
-  position: absolute;
-  inset: 4px;
-  border: 2px solid rgba(196, 167, 71, 0.3);
-  border-radius: 4px;
-  pointer-events: none;
-}
-
-/* ========================================
-   TYPEWRITER CURSOR
-   ======================================== */
-@keyframes cursor-blink {
-  0%, 50% { opacity: 1; }
-  51%, 100% { opacity: 0; }
-}
-
-.cursor-blink {
-  animation: cursor-blink 0.8s steps(1) infinite;
-}
-
-/* ========================================
    SCENE TRANSITIONS
    ======================================== */
 @keyframes scene-fade-in {
@@ -194,76 +159,6 @@
 }
 
 /* ========================================
-   VISUAL NOVEL: BACKGROUND
-   ======================================== */
-.vn-background {
-  position: absolute;
-  inset: 0;
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-}
-
-.vn-background::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    to bottom,
-    transparent 40%,
-    rgba(0, 0, 0, 0.3) 60%,
-    rgba(0, 0, 0, 0.7) 80%,
-    rgba(0, 0, 0, 0.85) 100%
-  );
-}
-
-/* ========================================
-   VISUAL NOVEL: CHARACTER PORTRAIT
-   ======================================== */
-.vn-portrait {
-  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.5));
-  transition: opacity 0.3s ease;
-}
-
-/* ========================================
-   VISUAL NOVEL: CHOICE BUTTONS
-   ======================================== */
-.vn-choice-btn {
-  position: relative;
-  overflow: hidden;
-  background: linear-gradient(135deg, rgba(30, 20, 50, 0.9), rgba(50, 30, 80, 0.9));
-  border: 2px solid rgba(196, 167, 71, 0.5);
-  border-radius: 8px;
-  padding: 12px 24px;
-  color: #f0e6d0;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.vn-choice-btn::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent);
-  transform: translateX(-100%);
-  transition: transform 0.5s ease;
-}
-
-.vn-choice-btn:hover {
-  border-color: #c4a747;
-  transform: translateY(-2px);
-  box-shadow: 0 0 20px rgba(196, 167, 71, 0.3);
-}
-
-.vn-choice-btn:hover::before {
-  transform: translateX(100%);
-}
-
-.vn-choice-btn:active {
-  transform: translateY(0) scale(0.98);
-}
-
-/* ========================================
    ACHIEVEMENT TOAST
    ======================================== */
 @keyframes achievement-slide-in {
@@ -283,18 +178,6 @@
 
 .achievement-toast.hiding {
   animation: achievement-slide-out 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-}
-
-/* ========================================
-   CONTINUE INDICATOR
-   ======================================== */
-@keyframes bounce-indicator {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(4px); }
-}
-
-.bounce-indicator {
-  animation: bounce-indicator 1s ease-in-out infinite;
 }
 
 /* ========================================
