@@ -453,6 +453,8 @@ const SHARED_CSP = {
   resourceDomains: [
     "https://fal.media",
     "https://*.fal.media",
+    "https://cdn.sonauto.ai",
+    "https://*.sonauto.ai",
     ...(r2PublicUrl ? [r2PublicUrl] : []),
   ],
 };
@@ -485,28 +487,26 @@ const server = new McpServer({ name: "quest-forge", version: "0.1.0" }, { capabi
       try {
         const gameId = crypto.randomUUID();
 
-        // Generate portraits for all characters + music tracks in parallel
+        // Phase 1: Portraits (parallel Fal calls)
         const characterPortraits = new Map<string, string>();
         const allCharacters = [input.playerCharacter, ...input.npcs];
 
-        const portraitGeneration = Promise.all(
+        await Promise.all(
           allCharacters.map(async (char) => {
             const url = await generateCharacterPortrait(char.appearance, input.style);
             characterPortraits.set(char.id, url);
           })
         );
 
-        const [_, musicTracks] = await Promise.all([
-          portraitGeneration,
-          generateMusicTracks(input.genre, input.tone),
-        ]);
-
-        // Phase 2: background + intro TTS in parallel (music done, ElevenLabs slots free)
+        // Phase 2: Music tracks (sequential Fal — respects concurrency) + intro TTS (Gradium, no conflict)
         const voiceId = getNarratorVoice(input.language);
-        const [initialBackgroundUrl, introAudioUrl] = await Promise.all([
-          generateSceneBackground(input.initialScene.setting, input.style),
+        const [musicTracks, introAudioUrl] = await Promise.all([
+          generateMusicTracks(input.genre, input.tone),
           generateTTS(input.introNarration, voiceId),
         ]);
+
+        // Phase 3: Background (single Fal call, music done)
+        const initialBackgroundUrl = await generateSceneBackground(input.initialScene.setting, input.style);
 
         // Determine the first speaking NPC
         const firstSpeakingNpcId = input.initialScene.presentNPCs[0];
