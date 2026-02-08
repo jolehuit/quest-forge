@@ -89,12 +89,6 @@ interface GameData {
   speakingNpcName: string;
   narrationAudioUrl?: string | null;
   musicAudioUrl?: string | null;
-  sfx?: {
-    click: string | null;
-    success: string | null;
-    failure: string | null;
-    transition: string | null;
-  };
   language: string;
 }
 
@@ -355,16 +349,87 @@ function QuestForgeGame() {
     [isMuted]
   );
 
-  // Play a one-shot SFX (fire-and-forget, no ref tracking)
+  // Procedural SFX via Web Audio API
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const getAudioCtx = useCallback(() => {
+    if (!audioCtxRef.current) audioCtxRef.current = new AudioContext();
+    return audioCtxRef.current;
+  }, []);
+
   const playSfx = useCallback(
-    (key: keyof NonNullable<GameData["sfx"]>) => {
-      const url = gameData?.sfx?.[key];
-      if (!url || isMuted) return;
-      const audio = new Audio(url);
-      audio.volume = 0.6;
-      audio.play().catch(() => {});
+    (key: "click" | "success" | "failure" | "transition") => {
+      if (isMuted) return;
+      const ctx = getAudioCtx();
+      const now = ctx.currentTime;
+      const gain = ctx.createGain();
+      gain.connect(ctx.destination);
+
+      if (key === "click") {
+        // Short sine blip
+        const osc = ctx.createOscillator();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(800, now);
+        osc.frequency.exponentialRampToValueAtTime(500, now + 0.06);
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+        osc.connect(gain);
+        osc.start(now);
+        osc.stop(now + 0.08);
+      } else if (key === "success") {
+        // Rising chime sequence
+        [523, 659, 784, 1047].forEach((freq, i) => {
+          const osc = ctx.createOscillator();
+          const g = ctx.createGain();
+          osc.type = "sine";
+          osc.frequency.value = freq;
+          g.gain.setValueAtTime(0, now + i * 0.12);
+          g.gain.linearRampToValueAtTime(0.25, now + i * 0.12 + 0.02);
+          g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.12 + 0.3);
+          osc.connect(g).connect(ctx.destination);
+          osc.start(now + i * 0.12);
+          osc.stop(now + i * 0.12 + 0.3);
+        });
+      } else if (key === "failure") {
+        // Descending dissonant tone
+        const osc1 = ctx.createOscillator();
+        const osc2 = ctx.createOscillator();
+        osc1.type = "sawtooth";
+        osc2.type = "sine";
+        osc1.frequency.setValueAtTime(300, now);
+        osc1.frequency.exponentialRampToValueAtTime(100, now + 0.5);
+        osc2.frequency.setValueAtTime(310, now);
+        osc2.frequency.exponentialRampToValueAtTime(90, now + 0.5);
+        gain.gain.setValueAtTime(0.15, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+        osc1.connect(gain);
+        osc2.connect(gain);
+        osc1.start(now);
+        osc2.start(now);
+        osc1.stop(now + 0.5);
+        osc2.stop(now + 0.5);
+      } else if (key === "transition") {
+        // Filtered noise whoosh
+        const bufferSize = ctx.sampleRate * 0.6;
+        const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const data = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+        const noise = ctx.createBufferSource();
+        noise.buffer = noiseBuffer;
+        const filter = ctx.createBiquadFilter();
+        filter.type = "bandpass";
+        filter.frequency.setValueAtTime(200, now);
+        filter.frequency.exponentialRampToValueAtTime(4000, now + 0.3);
+        filter.frequency.exponentialRampToValueAtTime(200, now + 0.6);
+        filter.Q.value = 2;
+        gain.gain.setValueAtTime(0, now);
+        gain.gain.linearRampToValueAtTime(0.2, now + 0.15);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+        noise.connect(filter).connect(gain);
+        noise.start(now);
+        noise.stop(now + 0.6);
+      }
     },
-    [gameData?.sfx, isMuted]
+    [isMuted, getAudioCtx]
   );
 
   // Sync mute state to active audio elements
@@ -876,7 +941,7 @@ function GameScreen({
   onEndStory: () => void;
   isTransitioning: boolean;
   isGeneratingScene: boolean;
-  playSfx: (key: keyof NonNullable<GameData["sfx"]>) => void;
+  playSfx: (key: "click" | "success" | "failure" | "transition") => void;
   t: I18nStrings;
 }) {
   const scene = gameState.currentScene;
@@ -1068,7 +1133,7 @@ function PuzzleScreen({
   onSubmitAnswer: (answer: string) => void;
   isChecking: boolean;
   isTransitioning: boolean;
-  playSfx: (key: keyof NonNullable<GameData["sfx"]>) => void;
+  playSfx: (key: "click" | "success" | "failure" | "transition") => void;
   t: I18nStrings;
 }) {
   const [answer, setAnswer] = useState("");
@@ -1351,7 +1416,7 @@ function DeathScreen({
   gameState: GameState;
   onRetry: () => void;
   isTransitioning: boolean;
-  playSfx: (key: keyof NonNullable<GameData["sfx"]>) => void;
+  playSfx: (key: "click" | "success" | "failure" | "transition") => void;
   t: I18nStrings;
 }) {
   void _gameData;

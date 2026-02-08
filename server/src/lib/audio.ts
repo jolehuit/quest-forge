@@ -192,68 +192,6 @@ export async function generateMusicTracks(
 }
 
 // ═══════════════════════════════════════════════════════════
-// Sound Effects — ElevenLabs Sound Generation API
-// ═══════════════════════════════════════════════════════════
-
-async function generateSoundEffect(
-  text: string,
-  durationSeconds: number = 1,
-): Promise<string | null> {
-  const apiKey = process.env.ELEVENLABS_API_KEY;
-  if (!apiKey) return null;
-
-  try {
-    const response = await fetch(
-      "https://api.elevenlabs.io/v1/sound-generation?output_format=mp3_22050_32",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "xi-api-key": apiKey,
-        },
-        body: JSON.stringify({
-          text,
-          duration_seconds: durationSeconds,
-          prompt_influence: 0.5,
-        }),
-      },
-    );
-
-    if (!response.ok) {
-      console.error(`ElevenLabs SFX error: ${response.status} ${response.statusText}`);
-      return null;
-    }
-
-    const buffer = Buffer.from(await response.arrayBuffer());
-    const key = `audio/sfx-${crypto.randomUUID()}.mp3`;
-    return await uploadToR2(buffer, key, "audio/mpeg");
-  } catch (error) {
-    console.error("Failed to generate SFX:", error);
-    return null;
-  }
-}
-
-export interface SfxPack {
-  click: string | null;
-  success: string | null;
-  failure: string | null;
-  transition: string | null;
-}
-
-export async function generateSfxPack(): Promise<SfxPack> {
-  // Batch 1: 3 concurrent (ElevenLabs concurrency limit = 3)
-  const [click, success, failure] = await Promise.all([
-    generateSoundEffect("Short magical UI button click, subtle fantasy interface tap sound", 0.5),
-    generateSoundEffect("Triumphant bright magical chime, puzzle solved, crystalline success fanfare", 1.5),
-    generateSoundEffect("Dark ominous wrong answer sound, brief eerie failure tone, foreboding", 1),
-  ]);
-  // Batch 2: 1 more
-  const transition = await generateSoundEffect("Magical whoosh scene transition, fantasy portal swoosh", 1);
-
-  return { click, success, failure, transition };
-}
-
-// ═══════════════════════════════════════════════════════════
 // Mood-to-track mapper
 // ═══════════════════════════════════════════════════════════
 

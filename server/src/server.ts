@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import { McpServer } from "skybridge/server";
 import { z } from "zod";
 import { generateCharacterPortrait, generateSceneBackground } from "./lib/fal.js";
-import { generateTTS, getNarratorVoice, generateMusicTracks, getMusicTrackForMood, generateSfxPack } from "./lib/audio.js";
+import { generateTTS, getNarratorVoice, generateMusicTracks, getMusicTrackForMood } from "./lib/audio.js";
 
 // ═══════════════════════════════════════════════════════════
 // LANGUAGE MAP
@@ -501,11 +501,10 @@ const server = new McpServer({ name: "quest-forge", version: "0.1.0" }, { capabi
           generateMusicTracks(input.genre, input.tone),
         ]);
 
-        // Phase 2: background + SFX + intro TTS in parallel (music done, ElevenLabs slots free)
+        // Phase 2: background + intro TTS in parallel (music done, ElevenLabs slots free)
         const voiceId = getNarratorVoice(input.language);
-        const [initialBackgroundUrl, sfxPack, introAudioUrl] = await Promise.all([
+        const [initialBackgroundUrl, introAudioUrl] = await Promise.all([
           generateSceneBackground(input.initialScene.setting, input.style),
-          generateSfxPack(),
           generateTTS(input.introNarration, voiceId),
         ]);
 
@@ -611,7 +610,6 @@ const server = new McpServer({ name: "quest-forge", version: "0.1.0" }, { capabi
           introAudioUrl,
           narrationAudioUrl,
           musicAudioUrl,
-          sfx: sfxPack,
           language: input.language,
         };
 
