@@ -60,10 +60,23 @@ const SceneCharacterSchema = z.object({
   emotionalState: z.string(),
 });
 
+// Puzzle schema — enigmas the player must solve
+const PuzzleSchema = z.object({
+  id: z.string(),
+  type: z.enum(["riddle", "password", "logic", "trust_challenge"]),
+  title: z.string().describe("Nom de l'épreuve"),
+  description: z.string().describe("L'énigme ou la question posée au joueur"),
+  acceptedAnswers: z.array(z.string()).min(1).max(5).describe("Réponses acceptées (comparaison insensible à la casse et accents)"),
+  hints: z.array(z.string()).min(2).max(3).describe("Indices progressifs que le LLM utilisera pour guider le joueur"),
+  maxAttempts: z.number().min(1).max(5).default(3),
+  failureConsequence: z.enum(["death", "trust_loss"]),
+  visualTheme: z.enum(["ancient_runes", "locked_door", "magic_mirror", "shadow_trial", "potion_choice"]),
+});
+
 // Narrative scene — the core of the new system
 const NarrativeSceneSchema = z.object({
   id: z.string(),
-  sequenceNumber: z.number().describe("Order in the story (1-10)"),
+  sequenceNumber: z.number().describe("Order in the story (1-6)"),
   narration: z.object({
     text: z.string().describe("Descriptive text shown at top of widget"),
     mood: z.string().describe("Atmospheric tone"),
@@ -75,6 +88,7 @@ const NarrativeSceneSchema = z.object({
   situation: z.string().describe("What's happening in this scene"),
   exits: z.array(SceneExitSchema).min(0).max(3).describe("0-3 choices to progress (0 for ending scenes)"),
   isEnding: z.boolean().describe("true = final scene of the story"),
+  puzzle: PuzzleSchema.optional().describe("Si présent, le joueur doit résoudre cette épreuve avant de continuer"),
 });
 
 // ═══════════════════════════════════════════════════════════
@@ -95,6 +109,7 @@ const CreateStorySchema = z.object({
     stakes: z.string().describe("What happens if the player fails"),
     mystery: z.string().describe("The hidden truth to discover"),
   }),
+  puzzles: z.array(PuzzleSchema).length(2).describe("Exactement 2 énigmes. La première sera jouée à la scène 2, la seconde à la scène 4. Chaque énigme doit être thématiquement liée à l'histoire et au PNJ présent."),
   initialScene: z.object({
     narration: z.string().describe("Opening scene description"),
     setting: z.string().describe("Location description for background"),
@@ -126,7 +141,7 @@ const GenerateSceneSchema = z.object({
   exitChoiceId: z.string().describe("Which exit was chosen"),
   storyMemory: z.array(z.string()).max(10).describe("Key facts to remember (max 10)"),
   trustLevel: z.number().min(1).max(10).describe("Current trust/intimacy level with NPCs"),
-  sceneCount: z.number().describe("How many scenes so far (max 10)"),
+  sceneCount: z.number().describe("How many scenes so far (max 6)"),
 });
 
 // ═══════════════════════════════════════════════════════════
@@ -138,6 +153,7 @@ interface StoredGame {
   characters: Map<string, (z.infer<typeof CharacterSchema> | z.infer<typeof PlayerCharacterSchema>) & { portraitUrl?: string }>;
   scenes: Map<string, z.infer<typeof NarrativeSceneSchema>>;
   characterPortraits: Map<string, string>; // characterId -> portraitUrl
+  puzzleState: Map<string, { attemptsLeft: number; solved: boolean }>;
   createdAt: number;
 }
 
@@ -164,7 +180,7 @@ This tool establishes:
 4. The opening scene with narration and choices
 
 STORY STRUCTURE:
-- 10 scenes maximum (to manage token limits)
+- 6 scenes maximum (to manage token limits)
 - Each scene has descriptive narration at the top
 - Player character always shown on the left
 - NPCs shown on the right (can change per scene)
@@ -208,7 +224,7 @@ The server:
 3. Builds the complete scene with characters and heuristic exits
 4. Returns structuredContent (scene data for widget) and content (context update for LLM)
 
-Ending mechanism: scenes 7-8 include conclusion exits, scene 9 all converge, scene 10 is final.`;
+Ending mechanism: scene 4 includes conclusion exits, scene 5 all converge, scene 6 is final.`;
 
 // ═══════════════════════════════════════════════════════════
 // SYSTEM PROMPT BUILDER — LLM = 1 NPC per scene
@@ -235,7 +251,9 @@ THE PLAYER:
 
 HOW TO RESPOND:
 - Speak in first person as ${speakingNpc.name}
-- Keep responses short (1-3 sentences)
+- MAXIMUM 2-3 lignes. Jamais plus. Pas de narration, pas de description d'ambiance.
+- Tu ne fais que PARLER. Le widget gère le décor et l'ambiance.
+- Exemple: "Les ombres ? *ricane* Tu n'es pas prêt pour ce que tu trouveras là-bas. Mais si tu insistes..."
 - React based on your personality and emotional state
 - NEVER mention being an AI or a game
 - Do NOT call any tool — the widget handles scene transitions
@@ -287,8 +305,8 @@ function generateExits(
   const { worldContext, npcs } = game.story;
   const playerCharId = game.story.playerCharacter.id;
 
-  // Scene 10 is the final scene — no exits
-  if (sceneCount >= 10) return [];
+  // Scene 6 is the final scene — no exits
+  if (sceneCount >= 6) return [];
 
   // Available NPCs (rotate to vary)
   const availableNpcs = npcs.filter(n => n.id !== playerCharId);
@@ -324,15 +342,15 @@ function generateExits(
   // Determine archetype mix based on scene progression
   let archetypePool: ExitArchetype[];
 
-  if (sceneCount >= 9) {
-    // Scene 9: ALL exits converge toward the ending
+  if (sceneCount >= 5) {
+    // Scene 5: ALL exits converge toward the ending
     archetypePool = [
       EXIT_ARCHETYPES.find(a => a.type === "conclusion")!,
       EXIT_ARCHETYPES.find(a => a.type === "conclusion")!,
       EXIT_ARCHETYPES.find(a => a.type === "confront")!,
     ];
-  } else if (sceneCount >= 7) {
-    // Scenes 7-8: include at least one conclusion exit
+  } else if (sceneCount >= 4) {
+    // Scene 4: include at least one conclusion exit
     const normalTypes = EXIT_ARCHETYPES.filter(a => a.type !== "conclusion");
     archetypePool = [
       EXIT_ARCHETYPES.find(a => a.type === "conclusion")!,
@@ -340,7 +358,7 @@ function generateExits(
       pickRandom(normalTypes),
     ];
   } else {
-    // Scenes 1-6: varied mix, weighted by trust level
+    // Scenes 1-3: varied mix, weighted by trust level
     const normalTypes = EXIT_ARCHETYPES.filter(a => a.type !== "conclusion");
     archetypePool = [
       pickRandom(normalTypes),
@@ -350,7 +368,7 @@ function generateExits(
   }
 
   // Build 2-3 exits
-  const exitCount = sceneCount >= 9 ? 2 : (Math.random() > 0.4 ? 3 : 2);
+  const exitCount = sceneCount >= 5 ? 2 : (Math.random() > 0.4 ? 3 : 2);
   const exits: z.infer<typeof SceneExitSchema>[] = [];
 
   for (let i = 0; i < exitCount; i++) {
@@ -365,7 +383,7 @@ function generateExits(
     });
 
     // For conclusion exits, all paths lead to ending
-    const isConverging = sceneCount >= 9 || archetype.type === "conclusion";
+    const isConverging = sceneCount >= 5 || archetype.type === "conclusion";
 
     const nextSceneNpc = getNpcForExit(i);
     const presentNpcIds = [nextSceneNpc.id];
@@ -519,6 +537,7 @@ const server = new McpServer({ name: "quest-forge", version: "0.1.0" }, { capabi
           characters: charactersMap,
           scenes: scenesMap,
           characterPortraits,
+          puzzleState: new Map(),
           createdAt: Date.now(),
         });
 
@@ -744,7 +763,7 @@ const server = new McpServer({ name: "quest-forge", version: "0.1.0" }, { capabi
         const newSceneId = `scene-${newSceneCount}`;
 
         // Determine if this is the ending
-        const isEnding = newSceneCount >= 10;
+        const isEnding = newSceneCount >= 6;
 
         // Generate new Fal AI background
         const backgroundUrl = await generateSceneBackground(
@@ -791,6 +810,17 @@ const server = new McpServer({ name: "quest-forge", version: "0.1.0" }, { capabi
           isEnding,
         };
 
+        // Puzzle injection for scenes 2 and 4
+        const PUZZLE_SCENES = [2, 4];
+        if (PUZZLE_SCENES.includes(newSceneCount)) {
+          const puzzleIndex = PUZZLE_SCENES.indexOf(newSceneCount);
+          const puzzle = game.story.puzzles?.[puzzleIndex];
+          if (puzzle) {
+            newScene.puzzle = puzzle;
+            game.puzzleState.set(puzzle.id, { attemptsLeft: puzzle.maxAttempts, solved: false });
+          }
+        }
+
         // Store scene in game store
         game.scenes.set(newSceneId, newScene);
 
@@ -812,8 +842,8 @@ Location: ${nextSceneData.setting}
 Situation: ${nextSceneData.situation}
 Player trust: ${input.trustLevel}/10
 ${input.trustLevel < 4 ? "You are suspicious." : input.trustLevel < 7 ? "You are gradually opening up." : "You trust the player."}
-Respond in first person as ${speakingNpcName}. Short responses (1-3 sentences).
-Do NOT call any tool. Do NOT speak for the player.${isEnding ? "\nThis is the FINAL scene. Provide narrative closure." : ""}`;
+Respond in first person as ${speakingNpcName}. MAXIMUM 2-3 lignes. Pas de narration ni descriptions.
+Do NOT call any tool. Do NOT speak for the player.${isEnding ? "\nThis is the FINAL scene. Provide narrative closure." : ""}${newScene.puzzle ? `\n[PUZZLE MODE] Le joueur fait face à l'épreuve "${newScene.puzzle.title}".\nQuand le joueur te demande des indices:\n- Donne UN indice cryptique (1-2 phrases MAX)\n- Ne révèle JAMAIS la réponse directement\n- Reste dans le personnage` : ""}`;
 
         return {
           structuredContent: {
@@ -839,6 +869,96 @@ Do NOT call any tool. Do NOT speak for the player.${isEnding ? "\nThis is the FI
         };
       }
     },
+  )
+
+  // ═══════════════════════════════════════════════════════════
+  // Tool 4: quest-forge-puzzle-check (check puzzle answer)
+  // Called by the game widget via useCallTool
+  // ═══════════════════════════════════════════════════════════
+  .registerTool(
+    "quest-forge-puzzle-check",
+    {
+      description: "Check a puzzle answer. Called by the game widget via useCallTool.",
+      inputSchema: {
+        gameId: z.string(),
+        puzzleId: z.string(),
+        answer: z.string().max(200),
+        reset: z.boolean().optional().describe("If true, reset puzzle attempts for retry after death"),
+      },
+      _meta: { "openai/widgetAccessible": true },
+    },
+    async (args) => {
+      const input = args as { gameId: string; puzzleId: string; answer: string; reset?: boolean };
+      const game = gameStore.get(input.gameId);
+      if (!game) {
+        return { content: [{ type: "text" as const, text: "Game not found" }], isError: true };
+      }
+
+      // Find the puzzle in the story
+      const puzzle = game.story.puzzles?.find(p => p.id === input.puzzleId);
+      if (!puzzle) {
+        return { content: [{ type: "text" as const, text: "Puzzle not found" }], isError: true };
+      }
+
+      // Handle reset (retry after death)
+      if (input.reset) {
+        game.puzzleState.set(input.puzzleId, { attemptsLeft: puzzle.maxAttempts, solved: false });
+        return {
+          structuredContent: { result: "reset", attemptsLeft: puzzle.maxAttempts },
+          content: [{ type: "text" as const, text: "Puzzle reset" }],
+          isError: false,
+        };
+      }
+
+      const state = game.puzzleState.get(input.puzzleId) ?? { attemptsLeft: puzzle.maxAttempts, solved: false };
+
+      // Normalize function
+      const normalize = (s: string) => s.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+      const normalizedAnswer = normalize(input.answer);
+      const isCorrect = puzzle.acceptedAnswers.some(a => {
+        const na = normalize(a);
+        if (na === normalizedAnswer) return true;
+        // Simple Levenshtein tolerance for short answers
+        if (na.length <= 10 && normalizedAnswer.length <= 10) {
+          let dist = 0;
+          const longer = na.length > normalizedAnswer.length ? na : normalizedAnswer;
+          const shorter = na.length > normalizedAnswer.length ? normalizedAnswer : na;
+          for (let i = 0; i < longer.length; i++) {
+            if (shorter[i] !== longer[i]) dist++;
+          }
+          return dist <= 1;
+        }
+        return false;
+      });
+
+      if (isCorrect) {
+        state.solved = true;
+        game.puzzleState.set(input.puzzleId, state);
+        return {
+          structuredContent: { result: "success" },
+          content: [{ type: "text" as const, text: "Puzzle solved!" }],
+          isError: false,
+        };
+      }
+
+      state.attemptsLeft--;
+      game.puzzleState.set(input.puzzleId, state);
+
+      if (state.attemptsLeft <= 0) {
+        return {
+          structuredContent: { result: "failure", consequence: puzzle.failureConsequence },
+          content: [{ type: "text" as const, text: "Puzzle failed" }],
+          isError: false,
+        };
+      }
+
+      return {
+        structuredContent: { result: "wrong", attemptsLeft: state.attemptsLeft },
+        content: [{ type: "text" as const, text: `Wrong answer. ${state.attemptsLeft} attempts left.` }],
+        isError: false,
+      };
+    }
   );
 
 export default server;

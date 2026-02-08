@@ -380,6 +380,69 @@
   box-shadow: 0 0 4px rgba(196, 167, 71, 0.5);
 }
 
+/* ═══════════════════════════════════════
+   PUZZLE SYSTEM
+   ═══════════════════════════════════════ */
+
+/* Puzzle panel entry animation */
+.puzzle-panel {
+  animation: puzzleSlideUp 0.5s ease-out forwards;
+}
+
+@keyframes puzzleSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Puzzle input styling */
+.puzzle-input {
+  caret-color: #c4a747;
+}
+
+.puzzle-input::selection {
+  background: rgba(196, 167, 71, 0.3);
+}
+
+.puzzle-input:focus {
+  box-shadow: 0 0 0 1px rgba(196, 167, 71, 0.3), 0 0 15px rgba(196, 167, 71, 0.1);
+}
+
+/* Shake animation for wrong answers */
+.shake-animation {
+  animation: puzzleShake 0.5s ease-in-out;
+}
+
+@keyframes puzzleShake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
+  20%, 40%, 60%, 80% { transform: translateX(4px); }
+}
+
+/* ═══════════════════════════════════════
+   DEATH SCREEN
+   ═══════════════════════════════════════ */
+
+.death-screen {
+  animation: deathFadeIn 0.8s ease-out forwards;
+}
+
+@keyframes deathFadeIn {
+  from {
+    opacity: 0;
+    filter: blur(10px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
 /* ========================================
    REDUCED MOTION
    ======================================== */

@@ -1,5 +1,5 @@
 import "@/index.css";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { mountWidget, useCallTool, useDisplayMode, useSendFollowUpMessage, useWidgetState } from "skybridge/web";
 import { useToolInfo } from "@/helpers";
 
@@ -40,6 +40,17 @@ interface SceneExit {
   };
 }
 
+interface PuzzleData {
+  id: string;
+  type: string;
+  title: string;
+  description: string;
+  hints: string[];
+  maxAttempts: number;
+  failureConsequence: "death" | "trust_loss";
+  visualTheme: string;
+}
+
 interface NarrativeScene {
   id: string;
   sequenceNumber: number;
@@ -51,6 +62,7 @@ interface NarrativeScene {
   situation: string;
   exits: SceneExit[];
   isEnding: boolean;
+  puzzle?: PuzzleData;
 }
 
 interface GameData {
@@ -74,7 +86,7 @@ interface GameData {
   speakingNpcName: string;
 }
 
-type Screen = "title" | "intro" | "game" | "end";
+type Screen = "title" | "intro" | "game" | "puzzle" | "death" | "end";
 
 interface GameState {
   [key: string]: unknown;
@@ -85,6 +97,8 @@ interface GameState {
   storyMemory: string[];
   trustLevel: number;
   sceneCount: number;
+  puzzleAttempts: number;
+  currentHintIndex: number;
   _initialized: boolean;
 }
 
@@ -110,6 +124,22 @@ interface GenerateSceneResponse {
   };
 }
 
+type PuzzleCheckArgs = {
+  [key: string]: unknown;
+  gameId: string;
+  puzzleId: string;
+  answer: string;
+  reset?: boolean;
+};
+
+type PuzzleCheckResponse = {
+  structuredContent: {
+    result: "success" | "failure" | "wrong" | "reset";
+    consequence?: "death" | "trust_loss";
+    attemptsLeft?: number;
+  };
+};
+
 // ═══════════════════════════════════════
 // MAIN WIDGET COMPONENT
 // ═══════════════════════════════════════
@@ -123,6 +153,9 @@ function QuestForgeGame() {
   const { callToolAsync, isPending: isGeneratingScene } =
     useCallTool<GenerateSceneArgs, GenerateSceneResponse>("quest-forge-generate-scene");
 
+  const { callToolAsync: checkPuzzle, isPending: isCheckingPuzzle } =
+    useCallTool<PuzzleCheckArgs, PuzzleCheckResponse>("quest-forge-puzzle-check");
+
   const [gameState, setGameState] = useWidgetState<GameState>({
     screen: "title",
     currentScene: {} as NarrativeScene,
@@ -131,6 +164,8 @@ function QuestForgeGame() {
     storyMemory: [],
     trustLevel: 5,
     sceneCount: 1,
+    puzzleAttempts: 3,
+    currentHintIndex: 0,
     _initialized: false,
   });
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -146,6 +181,8 @@ function QuestForgeGame() {
         storyMemory: [],
         trustLevel: 5,
         sceneCount: 1,
+        puzzleAttempts: 3,
+        currentHintIndex: 0,
         _initialized: true,
       });
     }
@@ -183,20 +220,40 @@ function QuestForgeGame() {
         // Visual transition
         setIsTransitioning(true);
         setTimeout(() => {
-          setGameState((prev) => ({
-            ...prev,
-            currentScene: scene,
-            speakingNpcName,
-            sceneCount: prev.sceneCount + 1,
-            trustLevel,
-            visitedSceneIds: [...prev.visitedSceneIds, scene.id],
-            screen: isEnding ? "end" : prev.screen,
-          }));
+          if (scene.puzzle) {
+            setGameState((prev) => ({
+              ...prev,
+              currentScene: scene,
+              speakingNpcName,
+              sceneCount: prev.sceneCount + 1,
+              trustLevel,
+              visitedSceneIds: [...prev.visitedSceneIds, scene.id],
+              screen: "puzzle",
+              puzzleAttempts: scene.puzzle!.maxAttempts,
+              currentHintIndex: 0,
+            }));
+          } else {
+            setGameState((prev) => ({
+              ...prev,
+              currentScene: scene,
+              speakingNpcName,
+              sceneCount: prev.sceneCount + 1,
+              trustLevel,
+              visitedSceneIds: [...prev.visitedSceneIds, scene.id],
+              screen: isEnding ? "end" : "game",
+            }));
+          }
           setIsTransitioning(false);
         }, 400);
 
-        // Make the NPC speak in the chat (EndScreen handles the ending message)
-        if (!isEnding) {
+        // Send puzzle or normal message
+        if (scene.puzzle) {
+          sendFollowUpMessage(
+            `[PUZZLE] ${speakingNpcName} pose une épreuve au joueur: "${scene.puzzle.title}".\n` +
+            `Énigme: "${scene.puzzle.description}"\n` +
+            `Si le joueur demande des indices, donne des indices cryptiques en 2-3 lignes MAX sans révéler la réponse.`
+          );
+        } else if (!isEnding) {
           sendFollowUpMessage(
             `[Scene ${scene.sequenceNumber}] Le joueur entre dans la scene.\n` +
             `Reponds en tant que ${speakingNpcName} a cette nouvelle situation.`
@@ -231,6 +288,77 @@ function QuestForgeGame() {
     }
   }, [transitionTo, gameData, sendFollowUpMessage]);
 
+  // Handle puzzle answer submission
+  const handlePuzzleSubmit = useCallback(
+    async (answer: string) => {
+      if (!gameData || isCheckingPuzzle) return;
+      const puzzle = gameState.currentScene.puzzle;
+      if (!puzzle) return;
+
+      try {
+        const result = await checkPuzzle({
+          gameId: gameData.gameId,
+          puzzleId: puzzle.id,
+          answer,
+        });
+
+        const { result: puzzleResult, consequence, attemptsLeft } = result.structuredContent;
+
+        if (puzzleResult === "success") {
+          sendFollowUpMessage(
+            `[PUZZLE RÉUSSI] Le joueur a résolu l'épreuve "${puzzle.title}". Félicite-le brièvement en 1-2 lignes en tant que ${gameState.speakingNpcName}.`
+          );
+          setGameState((prev) => ({ ...prev, screen: "game" }));
+        } else if (puzzleResult === "failure") {
+          if (consequence === "death") {
+            setGameState((prev) => ({ ...prev, screen: "death" }));
+          } else {
+            sendFollowUpMessage(
+              `[PUZZLE ÉCHOUÉ] Le joueur a échoué l'épreuve. Exprime ta déception en 1-2 lignes en tant que ${gameState.speakingNpcName}.`
+            );
+            setGameState((prev) => ({
+              ...prev,
+              screen: "game",
+              trustLevel: Math.max(1, prev.trustLevel - 3),
+            }));
+          }
+        } else if (puzzleResult === "wrong") {
+          setGameState((prev) => ({
+            ...prev,
+            puzzleAttempts: attemptsLeft ?? prev.puzzleAttempts - 1,
+          }));
+        }
+      } catch (error) {
+        console.error("Puzzle check failed:", error);
+      }
+    },
+    [gameData, isCheckingPuzzle, checkPuzzle, gameState, sendFollowUpMessage, setGameState]
+  );
+
+  // Handle puzzle retry from death screen
+  const handlePuzzleRetry = useCallback(
+    async () => {
+      if (!gameData) return;
+      const puzzle = gameState.currentScene.puzzle;
+      if (!puzzle) return;
+
+      await checkPuzzle({
+        gameId: gameData.gameId,
+        puzzleId: puzzle.id,
+        answer: "",
+        reset: true,
+      });
+
+      setGameState((prev) => ({
+        ...prev,
+        screen: "puzzle",
+        puzzleAttempts: puzzle.maxAttempts,
+        currentHintIndex: 0,
+      }));
+    },
+    [gameData, checkPuzzle, gameState, setGameState]
+  );
+
   if (!gameData || !gameState._initialized) {
     return (
       <div className="vn-widget flex items-center justify-center">
@@ -245,7 +373,7 @@ function QuestForgeGame() {
   return (
     <div
       className="vn-widget"
-      data-llm={`Jeu: ${gameData.title} | Scene ${gameState.sceneCount}/10 | Lieu: ${scene.setting} | PNJ: ${speakingNpcName} | Confiance: ${gameState.trustLevel}/10`}
+      data-llm={`Jeu: ${gameData.title} | Scene ${gameState.sceneCount}/6 | Lieu: ${scene.setting} | PNJ: ${speakingNpcName} | Confiance: ${gameState.trustLevel}/10`}
     >
       {gameState.screen === "title" && (
         <TitleScreen
@@ -269,6 +397,23 @@ function QuestForgeGame() {
           onEndStory={() => transitionTo("end")}
           isTransitioning={isTransitioning}
           isGeneratingScene={isGeneratingScene}
+        />
+      )}
+      {gameState.screen === "puzzle" && (
+        <PuzzleScreen
+          gameData={gameData}
+          gameState={gameState}
+          onSubmitAnswer={handlePuzzleSubmit}
+          isChecking={isCheckingPuzzle}
+          isTransitioning={isTransitioning}
+        />
+      )}
+      {gameState.screen === "death" && (
+        <DeathScreen
+          gameData={gameData}
+          gameState={gameState}
+          onRetry={handlePuzzleRetry}
+          isTransitioning={isTransitioning}
         />
       )}
       {gameState.screen === "end" && (
@@ -582,9 +727,216 @@ function GameScreen({
         </div>
         <div className="bg-black/60 backdrop-blur-sm rounded-full px-2 py-0.5">
           <span className="text-[#8a8a9a] text-[10px]">
-            {gameState.sceneCount}/10
+            {gameState.sceneCount}/6
           </span>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════
+// PUZZLE SCREEN
+// ═══════════════════════════════════════
+
+function PuzzleScreen({
+  gameData,
+  gameState,
+  onSubmitAnswer,
+  isChecking,
+  isTransitioning,
+}: {
+  gameData: GameData;
+  gameState: GameState;
+  onSubmitAnswer: (answer: string) => void;
+  isChecking: boolean;
+  isTransitioning: boolean;
+}) {
+  const [answer, setAnswer] = useState("");
+  const [showWrong, setShowWrong] = useState(false);
+  const puzzle = gameState.currentScene.puzzle;
+  const scene = gameState.currentScene;
+  const playerChar = gameData.playerCharacter;
+  const npcs = scene.characters.filter((c) => c.characterId !== playerChar.id);
+  const getCharacter = (id: string) => gameData.characters.find((c) => c.id === id);
+  const prevAttempts = useRef(gameState.puzzleAttempts);
+
+  useEffect(() => {
+    if (gameState.puzzleAttempts < prevAttempts.current) {
+      setShowWrong(true);
+      setTimeout(() => setShowWrong(false), 600);
+      setAnswer("");
+    }
+    prevAttempts.current = gameState.puzzleAttempts;
+  }, [gameState.puzzleAttempts]);
+
+  if (!puzzle) return null;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (answer.trim() && !isChecking) {
+      onSubmitAnswer(answer.trim());
+    }
+  };
+
+  // Build the visual theme class
+  const themeClasses: Record<string, string> = {
+    ancient_runes: "border-amber-500/50",
+    locked_door: "border-stone-400/50",
+    magic_mirror: "border-purple-400/50",
+    shadow_trial: "border-red-500/50",
+    potion_choice: "border-emerald-400/50",
+  };
+  const themeBorder = themeClasses[puzzle.visualTheme] || "border-[#c4a747]/50";
+
+  return (
+    <div className={`screen-enter w-full h-full relative overflow-hidden rounded-2xl ${isTransitioning ? "opacity-0 scale-95" : ""} transition-all duration-400`}>
+      {/* Background */}
+      <div className="absolute inset-0 bg-cover bg-center scene-fade-in" style={{ backgroundImage: `url(${scene.backgroundUrl})` }} />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/70 to-black/60" />
+
+      {/* Characters - same layout as GameScreen */}
+      <div className="absolute inset-0 flex items-end justify-between px-4 pb-44 pointer-events-none">
+        <div className="character-portrait-left pointer-events-auto">
+          <div className="relative">
+            <div className="w-24 h-32 md:w-28 md:h-36 rounded-t-lg overflow-hidden border-2 border-[#c4a747]/40 shadow-2xl bg-black/50">
+              <img src={playerChar.portraitUrl} alt={playerChar.name} className="w-full h-full object-cover object-top" />
+            </div>
+            <div className="absolute -bottom-5 left-0 right-0 text-center">
+              <span className="text-[#c4a747] text-[10px] font-bold uppercase tracking-wider bg-black/70 px-2 py-0.5 rounded">{playerChar.name}</span>
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-3 pointer-events-auto">
+          {npcs.map((npc) => {
+            const char = getCharacter(npc.characterId);
+            if (!char) return null;
+            return (
+              <div key={npc.characterId} className="character-portrait-right">
+                <div className="relative">
+                  <div className={`w-24 h-32 md:w-28 md:h-36 rounded-t-lg overflow-hidden border-2 shadow-2xl bg-black/50 ${npc.isSpeaking ? "border-[#c4a747] shadow-[#c4a747]/30" : "border-[#8a8a9a]/40"}`}>
+                    <img src={char.portraitUrl} alt={char.name} className="w-full h-full object-cover object-top" />
+                  </div>
+                  <div className="absolute -bottom-5 left-0 right-0 text-center">
+                    <span className={`text-[10px] font-bold uppercase tracking-wider bg-black/70 px-2 py-0.5 rounded ${npc.isSpeaking ? "text-[#c4a747]" : "text-[#8a8a9a]"}`}>{char.name}</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Puzzle Panel */}
+      <div className="absolute bottom-0 left-0 right-0 z-30 p-3">
+        <div className={`puzzle-panel max-w-2xl mx-auto bg-black/80 backdrop-blur-sm border-2 ${themeBorder} rounded-xl p-4 ${showWrong ? "shake-animation" : ""}`}>
+          {/* Title */}
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <span className="text-[#c4a747] text-xs uppercase tracking-wider font-bold">⚠ Épreuve</span>
+              <span className="text-[#f0e6d0] text-sm font-bold">{puzzle.title}</span>
+            </div>
+            {/* Hearts */}
+            <div className="flex gap-1">
+              {Array.from({ length: puzzle.maxAttempts }).map((_, i) => (
+                <span key={i} className={`text-sm transition-all duration-300 ${i < gameState.puzzleAttempts ? "text-red-500" : "text-[#8a8a9a]/30"}`}>
+                  ❤️
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Riddle text */}
+          <p className="text-[#f0e6d0] text-sm leading-relaxed mb-4 italic">
+            &quot;{puzzle.description}&quot;
+          </p>
+
+          {/* Answer input */}
+          <form onSubmit={handleSubmit} className="flex gap-2">
+            <input
+              type="text"
+              value={answer}
+              onChange={(e) => setAnswer(e.target.value)}
+              placeholder="Votre réponse..."
+              disabled={isChecking}
+              className="puzzle-input flex-1 bg-black/60 border border-[#c4a747]/30 rounded-lg px-3 py-2 text-[#f0e6d0] text-sm placeholder-[#8a8a9a]/50 focus:outline-none focus:border-[#c4a747] transition-colors"
+            />
+            <button
+              type="submit"
+              disabled={isChecking || !answer.trim()}
+              className="px-4 py-2 bg-[#c4a747]/20 border border-[#c4a747]/60 rounded-lg text-[#f0e6d0] text-sm font-bold uppercase tracking-wider hover:bg-[#c4a747]/30 transition-all disabled:opacity-50 disabled:pointer-events-none"
+            >
+              {isChecking ? "..." : "Valider"}
+            </button>
+          </form>
+
+          {/* Hint to talk to NPC */}
+          <p className="text-[#8a8a9a] text-[10px] mt-2 text-center italic">
+            Parlez au PNJ dans le chat pour obtenir des indices
+          </p>
+        </div>
+      </div>
+
+      {/* Scene Info Bar */}
+      <div className="absolute top-3 right-3 z-20 flex items-center gap-2">
+        <div className="bg-black/60 backdrop-blur-sm rounded-full px-2 py-0.5 flex items-center gap-1.5">
+          <span className="text-[#c4a747] text-[10px]">Confiance:</span>
+          <div className="flex gap-0.5">
+            {Array.from({ length: 10 }).map((_, i) => (
+              <div key={i} className={`w-1 h-2 rounded-sm ${i < gameState.trustLevel ? "bg-[#c4a747]" : "bg-[#8a8a9a]/30"}`} />
+            ))}
+          </div>
+        </div>
+        <div className="bg-black/60 backdrop-blur-sm rounded-full px-2 py-0.5">
+          <span className="text-[#8a8a9a] text-[10px]">{gameState.sceneCount}/6</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════
+// DEATH SCREEN
+// ═══════════════════════════════════════
+
+function DeathScreen({
+  gameData: _gameData,
+  gameState,
+  onRetry,
+  isTransitioning,
+}: {
+  gameData: GameData;
+  gameState: GameState;
+  onRetry: () => void;
+  isTransitioning: boolean;
+}) {
+  void _gameData;
+  const scene = gameState.currentScene;
+  const puzzle = scene.puzzle;
+
+  return (
+    <div className={`death-screen screen-enter w-full h-full relative overflow-hidden rounded-2xl ${isTransitioning ? "opacity-0 scale-95" : ""} transition-all duration-400`}>
+      <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${scene.backgroundUrl})` }} />
+      <div className="absolute inset-0 bg-gradient-to-t from-red-950/95 via-black/90 to-black/80" />
+
+      <div className="relative z-10 h-full flex flex-col items-center justify-center p-6 text-center">
+        <div className="text-6xl mb-4">☠️</div>
+        <h2 className="text-3xl md:text-4xl font-bold text-red-400 mb-4">
+          Vous avez échoué
+        </h2>
+        <p className="text-[#f0e6d0] text-sm md:text-base mb-2 max-w-md italic">
+          {puzzle ? `L'épreuve "${puzzle.title}" vous a été fatale.` : "L'aventure s'arrête ici."}
+        </p>
+        <p className="text-[#8a8a9a] text-xs mb-8 max-w-md">
+          Les ténèbres vous engloutissent... mais peut-être qu&apos;une autre tentative changera votre destin.
+        </p>
+
+        <button
+          onClick={onRetry}
+          className="px-8 py-3 bg-gradient-to-r from-red-900/40 to-red-800/20 border-2 border-red-400/60 rounded-lg text-[#f0e6d0] font-bold uppercase tracking-wider hover:bg-red-800/40 transition-all"
+        >
+          ↻ Retenter l&apos;épreuve
+        </button>
       </div>
     </div>
   );
