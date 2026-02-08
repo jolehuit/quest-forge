@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import { McpServer } from "skybridge/server";
 import { z } from "zod";
 import { fal } from "@fal-ai/client";
-import { generateCharacterPortrait, generateSceneBackground, transformCharacterPortrait } from "./lib/fal.js";
+import { generateCharacterPortrait, generateSceneBackground } from "./lib/fal.js";
 import { generateTTS, getNarratorVoice, generateMusicTracks, getMusicTrackForMood } from "./lib/audio.js";
 
 // ═══════════════════════════════════════════════════════════
@@ -623,9 +623,7 @@ const server = new McpServer({ name: "quest-forge", version: "0.1.0" }, { capabi
 
         const portraitGeneration = Promise.all(
           allCharacters.map(async (char) => {
-            const url = char.referenceImageUrl
-              ? await transformCharacterPortrait(char.referenceImageUrl, char.appearance, input.style)
-              : await generateCharacterPortrait(char.appearance, input.style);
+            const url = await generateCharacterPortrait(char.appearance, input.style);
             characterPortraits.set(char.id, url);
           })
         );
