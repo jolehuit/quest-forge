@@ -387,7 +387,6 @@ const server = new McpServer({ name: "quest-forge", version: "0.1.0" }, { capabi
 
         // Build preview data
         const previewData = {
-          gameId,
           title: input.title,
           genre: input.genre,
           synopsis: input.synopsis,
@@ -416,14 +415,12 @@ const server = new McpServer({ name: "quest-forge", version: "0.1.0" }, { capabi
           content: [
             {
               type: "text" as const,
-              text: `🎮 **Histoire créée : "${input.title}"**
-
-✅ ${allCharacters.length} personnages générés avec portraits
-✅ Scène initiale prête
-
-**➡️ PROCHAIN ÉTAPE :** Tu dois appeler l'outil **quest-forge-game** avec le gameId "${gameId}" pour démarrer l'aventure et afficher l'interface de jeu.
-
-Ne propose pas de choix ici - le joueur interagira via le widget une fois le jeu lancé.`,
+              text: `🎮 **Votre histoire "${input.title}" est prête !**\n\n` +
+                    `${allCharacters.length} personnages créés avec leurs portraits.\n\n` +
+                    `**👉 Pour JOUER maintenant :**\n` +
+                    `Cliquez sur le bouton **"🎮 JOUER À L'HISTOIRE"** dans le widget ci-dessus.\n\n` +
+                    `**✏️ Ou pour continuer à éditer :**\n` +
+                    `Dites-moi ce que vous voulez modifier (titre, personnages, scénario...) et je régénérerai l'histoire.`,
             },
           ],
           _meta: { previewData },

@@ -465,12 +465,12 @@
   animation: speaking-pulse 1.5s ease-in-out infinite;
 }
 
-/* Widget Container - Reduced height to leave space for chat */
+/* Widget Container - Balanced height for gameplay and chat */
 .vn-widget {
   width: 100%;
-  height: 65vh;
-  max-height: 600px;
-  min-height: 350px;
+  height: 70vh;
+  max-height: 700px;
+  min-height: 500px;
   position: relative;
   overflow: hidden;
   background: #0a0a0f;
