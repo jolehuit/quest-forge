@@ -2,6 +2,8 @@
 
 An AI-powered interactive visual novel generator built as a ChatGPT App with the [Skybridge](https://skybridge.dev) framework. Players describe a story concept, and Quest Forge creates a complete 6-scene narrative experience with AI-generated artwork, dynamic puzzles, trust mechanics, and multilingual support.
 
+[https://quest-forge-39bdea4b.alpic.live](https://quest-forge-39bdea4b.alpic.live/)
+
 ## How It Works
 
 ```
