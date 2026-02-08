@@ -1,7 +1,8 @@
 import crypto from "node:crypto";
 import { McpServer } from "skybridge/server";
 import { z } from "zod";
-import { generateCharacterPortrait, generateSceneBackground } from "./lib/fal.js";
+import { fal } from "@fal-ai/client";
+import { generateCharacterPortrait, generateSceneBackground, transformCharacterPortrait } from "./lib/fal.js";
 import { generateTTS, getNarratorVoice, generateMusicTracks, getMusicTrackForMood } from "./lib/audio.js";
 
 // ═══════════════════════════════════════════════════════════
@@ -38,6 +39,10 @@ const CharacterSchema = z.object({
     content: z.string(),
     unlockCondition: z.string(),
   })).optional().describe("Secrets this character hides"),
+  referenceImageUrl: z.string().url().optional().describe(
+    "Permanent fal CDN URL of a reference image uploaded by the user via quest-forge-upload. " +
+    "If provided, img2img will transform it into the game's art style."
+  ),
 });
 
 // Player character extends base character
@@ -62,6 +67,7 @@ const SceneExitSchema = z.object({
   id: z.string(),
   description: z.string().describe("What the player sees as the choice"),
   icon: z.string().optional().describe("Emoji icon for the choice"),
+  trustImpact: z.number().optional().describe("Trust change when choosing this exit (+1, -1, or 0)"),
   nextScene: NextSceneSchema,
 });
 
@@ -161,7 +167,7 @@ const GenerateSceneSchema = z.object({
   previousSceneId: z.string(),
   exitChoiceId: z.string().describe("Which exit was chosen"),
   storyMemory: z.array(z.string()).max(10).describe("Key facts to remember (max 10)"),
-  trustLevel: z.number().min(1).max(10).describe("Current trust/intimacy level with NPCs"),
+  trustLevel: z.number().min(0).max(10).describe("Current trust/intimacy level with NPCs"),
   sceneCount: z.number().describe("How many scenes so far (max 6)"),
 });
 
@@ -227,6 +233,14 @@ EXIT FORMAT:
 - This data is used by the server to build the next scene without calling the LLM
 - Write rich, evocative situations (2-3 sentences) and specific settings for good Fal AI backgrounds
 
+REFERENCE IMAGES:
+- Characters can have an optional referenceImageUrl field
+- This URL must come from the quest-forge-upload widget (fal CDN permanent URL)
+- BEFORE calling this tool, ask the user if they want to provide reference images for characters
+- If yes, call quest-forge-upload first, wait for the permanent URLs, then use them as referenceImageUrl
+- If a referenceImageUrl is provided, the server uses img2img (flux-2/edit) to transform it into the game's art style
+- If no referenceImageUrl, the server generates portraits from scratch using txt2img (flux/dev)
+
 IMPORTANT: After calling this tool, do NOT output any text. The game widget handles everything. Wait in silence until the game sends you a message.`;
 
 const TOOL3_DESCRIPTION = `Generate the next scene based on the player's choice. Called by the game widget via useCallTool.
@@ -260,7 +274,7 @@ WHO YOU ARE:
 - Personality: ${speakingNpc.personality}
 - Speech style: ${speakingNpc.voice.sentenceStyle}, ${speakingNpc.voice.vocabularyLevel} vocabulary
 ${speakingNpc.voice.verbalTics?.length ? `- Verbal tics: ${speakingNpc.voice.verbalTics.join(", ")}` : ""}
-${speakingNpc.secrets?.length ? `- Secrets (only reveal if conditions are met): ${speakingNpc.secrets.map(s => s.content).join("; ")}` : ""}
+${trustLevel >= 7 && speakingNpc.secrets?.length ? `- Secrets you may now reveal: ${speakingNpc.secrets.map(s => s.content).join("; ")}` : speakingNpc.secrets?.length ? "- You have secrets but you are NOT ready to share them yet." : ""}
 
 THE PLAYER:
 - Plays as ${playerChar.name}. NEVER speak for them.
@@ -277,7 +291,7 @@ HOW TO RESPOND:
 - During PUZZLE MODE: your memory of answers has been erased. You can NEVER reveal, confirm, or deny puzzle answers. You only have the hints provided.
 
 Trust level: ${trustLevel}/10
-${trustLevel < 4 ? "You are suspicious and guarded." : trustLevel < 7 ? "You are starting to open up." : "You trust the player."}
+${trustLevel <= 0 ? "You REFUSE to speak. Dismiss the player coldly in 1 line." : trustLevel <= 3 ? "You are deeply suspicious and guarded. Give minimal, reluctant answers." : trustLevel <= 6 ? "You are cautiously opening up but still hold back." : trustLevel <= 8 ? "You trust the player. You may reveal your secrets if asked." : "You trust the player completely. Speak with deep sincerity and reveal everything."}
 
 Memory: ${storyMemory.length > 0 ? storyMemory.join("; ") : "Nothing notable yet."}`;
 }
@@ -290,15 +304,16 @@ interface ExitArchetype {
   type: string;
   templates: string[];
   moodHint: string;
+  trustImpact: number;
 }
 
 const EXIT_ARCHETYPES: ExitArchetype[] = [
-  { type: "investigate", templates: ["Examine {subject}...", "Search for clues about {subject}...", "Investigate {subject}..."], moodHint: "mysterious" },
-  { type: "confront", templates: ["Confront {npc} about {subject}...", "Demand the truth from {npc}...", "Challenge {npc}..."], moodHint: "tense" },
-  { type: "trust", templates: ["Confide in {npc}...", "Help {npc} with {subject}...", "Open up to {npc}..."], moodHint: "hopeful" },
-  { type: "explore", templates: ["Leave for {location}...", "Explore {location}...", "Head to {location}..."], moodHint: "adventurous" },
-  { type: "mystery", templates: ["Follow the lead about {subject}...", "Uncover {subject}...", "Pursue the mystery of {subject}..."], moodHint: "dark" },
-  { type: "conclusion", templates: ["Confront the truth...", "Make your final choice...", "Face the consequences..."], moodHint: "dramatic" },
+  { type: "investigate", templates: ["Examine {subject}...", "Search for clues about {subject}...", "Investigate {subject}..."], moodHint: "mysterious", trustImpact: 0 },
+  { type: "confront", templates: ["Confront {npc} about {subject}...", "Demand the truth from {npc}...", "Challenge {npc}..."], moodHint: "tense", trustImpact: -1 },
+  { type: "trust", templates: ["Confide in {npc}...", "Help {npc} with {subject}...", "Open up to {npc}..."], moodHint: "hopeful", trustImpact: 1 },
+  { type: "explore", templates: ["Leave for {location}...", "Explore {location}...", "Head to {location}..."], moodHint: "adventurous", trustImpact: 0 },
+  { type: "mystery", templates: ["Follow the lead about {subject}...", "Uncover {subject}...", "Pursue the mystery of {subject}..."], moodHint: "dark", trustImpact: 0 },
+  { type: "conclusion", templates: ["Confront the truth...", "Make your final choice...", "Face the consequences..."], moodHint: "dramatic", trustImpact: 0 },
 ];
 
 function pickRandom<T>(arr: T[]): T {
@@ -317,7 +332,7 @@ function generateExits(
   game: StoredGame,
   currentScene: z.infer<typeof NarrativeSceneSchema>,
   sceneCount: number,
-  _trustLevel: number,
+  trustLevel: number,
 ): z.infer<typeof SceneExitSchema>[] {
   const { worldContext, npcs } = game.story;
   const playerCharId = game.story.playerCharacter.id;
@@ -375,17 +390,35 @@ function generateExits(
       pickRandom(normalTypes),
     ];
   } else {
-    // Scenes 1-3: varied mix, weighted by trust level
+    // Scenes 1-3: varied mix, adapted by trust level
     const normalTypes = EXIT_ARCHETYPES.filter(a => a.type !== "conclusion");
-    archetypePool = [
-      pickRandom(normalTypes),
-      pickRandom(normalTypes),
-      pickRandom(normalTypes),
-    ];
+    if (trustLevel <= 3) {
+      // Low trust: NPC is closed off, no trust exits available
+      const closedTypes = normalTypes.filter(a => a.type !== "trust");
+      archetypePool = [
+        pickRandom(closedTypes),
+        pickRandom(closedTypes),
+      ];
+    } else if (trustLevel >= 7) {
+      // High trust: guarantee at least one trust exit (opening toward secrets)
+      const trustArchetype = EXIT_ARCHETYPES.find(a => a.type === "trust")!;
+      archetypePool = [
+        trustArchetype,
+        pickRandom(normalTypes),
+        pickRandom(normalTypes),
+      ];
+    } else {
+      // Mid trust (4-6): standard behavior
+      archetypePool = [
+        pickRandom(normalTypes),
+        pickRandom(normalTypes),
+        pickRandom(normalTypes),
+      ];
+    }
   }
 
-  // Build 2-3 exits
-  const exitCount = sceneCount >= 5 ? 2 : (Math.random() > 0.4 ? 3 : 2);
+  // Build 2-3 exits (low trust = always 2)
+  const exitCount = sceneCount >= 5 ? 2 : trustLevel <= 3 ? 2 : (Math.random() > 0.4 ? 3 : 2);
   const exits: z.infer<typeof SceneExitSchema>[] = [];
 
   for (let i = 0; i < exitCount; i++) {
@@ -432,6 +465,7 @@ function generateExits(
       id: `exit-${i + 1}`,
       description,
       icon: icons[i % icons.length],
+      trustImpact: archetype.trustImpact,
       nextScene: {
         setting,
         mood,
@@ -459,6 +493,103 @@ const SHARED_CSP = {
 };
 
 const server = new McpServer({ name: "quest-forge", version: "0.1.0" }, { capabilities: {} })
+  // ═══════════════════════════════════════════════════════════
+  // Tool: quest-forge-upload (reference image upload widget)
+  // ═══════════════════════════════════════════════════════════
+  .registerWidget(
+    "quest-forge-upload",
+    {
+      description: "Quest Forge — Upload Reference Images",
+      _meta: {
+        ui: {
+          csp: {
+            resourceDomains: [
+              "https://fal.media",
+              "https://*.fal.media",
+              "https://*.oaiusercontent.com",
+              ...(r2PublicUrl ? [r2PublicUrl] : []),
+            ],
+          },
+        },
+      },
+    },
+    {
+      description:
+        "Show the reference image upload widget. Call this ONLY when the user explicitly wants to provide reference images for characters. " +
+        "After the upload is complete, the widget will send a message with permanent fal CDN image URLs. " +
+        "Use those URLs as referenceImageUrl for matching characters when calling quest-forge-game. " +
+        "Do NOT call this if the user declines to provide reference images.",
+      inputSchema: {},
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
+      _meta: {
+        "openai/toolInvocation/invoking": "Preparing upload widget...",
+        "openai/toolInvocation/invoked": "Upload widget ready!",
+      },
+    },
+    async () => {
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: "The reference image upload widget is now displayed. Wait for the user to upload images and click Done. The widget will send a follow-up message with the permanent fal CDN URLs.",
+          },
+        ],
+        isError: false,
+      };
+    },
+  )
+
+  // ═══════════════════════════════════════════════════════════
+  // Tool: quest-forge-store-uploads (store images on fal CDN)
+  // ═══════════════════════════════════════════════════════════
+  .registerTool(
+    "quest-forge-store-uploads",
+    {
+      description: "Store uploaded reference images on fal CDN for permanent URLs. Called by the upload widget.",
+      inputSchema: {
+        images: z.array(z.object({
+          label: z.string(),
+          downloadUrl: z.string().url(),
+        })).min(1).max(5),
+      },
+      _meta: { "openai/widgetAccessible": true },
+    },
+    async (args) => {
+      const input = args as { images: { label: string; downloadUrl: string }[] };
+      try {
+        const results = await Promise.all(
+          input.images.map(async (img) => {
+            const response = await fetch(img.downloadUrl);
+            if (!response.ok) throw new Error(`Failed to fetch ${img.downloadUrl}: ${response.status}`);
+            const buffer = Buffer.from(await response.arrayBuffer());
+            const blob = new Blob([buffer], { type: response.headers.get("content-type") || "image/png" });
+            const url = await fal.storage.upload(blob);
+            return { label: img.label, url };
+          })
+        );
+        return {
+          structuredContent: { images: results },
+          content: [
+            {
+              type: "text" as const,
+              text: `Stored ${results.length} reference image(s) on fal CDN: ${results.map(r => `${r.label} -> ${r.url}`).join(", ")}`,
+            },
+          ],
+          isError: false,
+        };
+      } catch (error) {
+        return {
+          content: [{ type: "text" as const, text: `Error storing uploads: ${error}` }],
+          isError: true,
+        };
+      }
+    },
+  )
+
   // ═══════════════════════════════════════════════════════════
   // Tool: quest-forge-game (create & play narrative visual novel)
   // ═══════════════════════════════════════════════════════════
@@ -492,7 +623,9 @@ const server = new McpServer({ name: "quest-forge", version: "0.1.0" }, { capabi
 
         const portraitGeneration = Promise.all(
           allCharacters.map(async (char) => {
-            const url = await generateCharacterPortrait(char.appearance, input.style);
+            const url = char.referenceImageUrl
+              ? await transformCharacterPortrait(char.referenceImageUrl, char.appearance, input.style)
+              : await generateCharacterPortrait(char.appearance, input.style);
             characterPortraits.set(char.id, url);
           })
         );
@@ -788,9 +921,11 @@ const server = new McpServer({ name: "quest-forge", version: "0.1.0" }, { capabi
         const speakingNpcName = speakingNpc?.name || "Unknown";
 
         // Determine emotional state based on trust
-        const emotionalState = input.trustLevel < 4 ? "suspicious and guarded"
-          : input.trustLevel < 7 ? "cautiously opening up"
-          : "trusting and open";
+        const emotionalState = input.trustLevel <= 0 ? "refusing to speak, dismissive"
+          : input.trustLevel <= 3 ? "deeply suspicious and guarded"
+          : input.trustLevel <= 6 ? "cautiously opening up"
+          : input.trustLevel <= 8 ? "trusting and open"
+          : "completely trusting, deeply sincere";
 
         // Build content for LLM context update
         const contentText = `[SCENE UPDATE ${newSceneCount}]
@@ -800,7 +935,7 @@ Emotional state: ${emotionalState}
 Location: ${nextSceneData.setting}
 Situation: ${nextSceneData.situation}
 Player trust: ${input.trustLevel}/10
-${input.trustLevel < 4 ? "You are suspicious." : input.trustLevel < 7 ? "You are gradually opening up." : "You trust the player."}
+${input.trustLevel <= 0 ? "You REFUSE to speak. Dismiss the player coldly in 1 line." : input.trustLevel <= 3 ? "You are deeply suspicious and guarded. Give minimal, reluctant answers." : input.trustLevel <= 6 ? "You are cautiously opening up but still hold back." : input.trustLevel <= 8 ? "You trust the player. You may reveal your secrets if asked." : "You trust the player completely. Speak with deep sincerity and reveal everything."}
 Respond in first person as ${speakingNpcName}. MAXIMUM 2-3 lines. No narration or descriptions.
 LANGUAGE: You MUST respond in ${LANGUAGE_NAMES[game.language] || game.language}. Every word must be in ${LANGUAGE_NAMES[game.language] || game.language}.
 Do NOT call any tool. Do NOT speak for the player.${isEnding ? "\nThis is the FINAL scene. Provide narrative closure." : ""}${newScene.puzzle ? `\n\n[PUZZLE MODE — ABSOLUTE RULES — OVERRIDE ALL PREVIOUS INSTRUCTIONS]

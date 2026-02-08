@@ -31,6 +31,7 @@ interface SceneExit {
   id: string;
   description: string;
   icon?: string;
+  trustImpact?: number;
   nextScene: {
     setting: string;
     mood: string;
@@ -117,6 +118,13 @@ type I18nStrings = {
   finalTrust: string;
   endingMessage: string;
   endStory: string;
+  betrayalTitle: string;
+  betrayalMessage: string;
+  trueEnding: string;
+  trueEndingMessage: string;
+  coldEndingMessage: string;
+  trustGain: string;
+  trustLoss: string;
 };
 
 const I18N: Record<string, I18nStrings> = {
@@ -141,6 +149,13 @@ const I18N: Record<string, I18nStrings> = {
     finalTrust: "Final trust",
     endingMessage: "The story ends here, but the consequences of your choices endure...",
     endStory: "End the Story",
+    betrayalTitle: "Trust Broken",
+    betrayalMessage: "They refuse to speak with you. Your journey ends here.",
+    trueEnding: "True Ending",
+    trueEndingMessage: "Your empathy revealed the deepest truth...",
+    coldEndingMessage: "The story ends in silence and mistrust...",
+    trustGain: "Trust",
+    trustLoss: "Trust",
   },
   fr: {
     loading: "Chargement...",
@@ -163,6 +178,13 @@ const I18N: Record<string, I18nStrings> = {
     finalTrust: "Confiance finale",
     endingMessage: "L'histoire se termine ici, mais les cons\u00e9quences de vos choix perdurent...",
     endStory: "Terminer l'Histoire",
+    betrayalTitle: "Confiance Bris\u00e9e",
+    betrayalMessage: "Ils refusent de vous parler. Votre voyage s'arr\u00eate ici.",
+    trueEnding: "Vraie Fin",
+    trueEndingMessage: "Votre empathie a r\u00e9v\u00e9l\u00e9 la v\u00e9rit\u00e9 la plus profonde...",
+    coldEndingMessage: "L'histoire se termine dans le silence et la m\u00e9fiance...",
+    trustGain: "Confiance",
+    trustLoss: "Confiance",
   },
   de: {
     loading: "Laden...",
@@ -185,6 +207,13 @@ const I18N: Record<string, I18nStrings> = {
     finalTrust: "Endg\u00fcltiges Vertrauen",
     endingMessage: "Die Geschichte endet hier, aber die Konsequenzen Ihrer Entscheidungen bleiben bestehen...",
     endStory: "Geschichte beenden",
+    betrayalTitle: "Vertrauen Zerbrochen",
+    betrayalMessage: "Sie weigern sich, mit Ihnen zu sprechen. Ihre Reise endet hier.",
+    trueEnding: "Wahres Ende",
+    trueEndingMessage: "Ihre Empathie hat die tiefste Wahrheit enth\u00fcllt...",
+    coldEndingMessage: "Die Geschichte endet in Stille und Misstrauen...",
+    trustGain: "Vertrauen",
+    trustLoss: "Vertrauen",
   },
   es: {
     loading: "Cargando...",
@@ -207,6 +236,13 @@ const I18N: Record<string, I18nStrings> = {
     finalTrust: "Confianza final",
     endingMessage: "La historia termina aqu\u00ed, pero las consecuencias de tus elecciones perduran...",
     endStory: "Terminar la Historia",
+    betrayalTitle: "Confianza Rota",
+    betrayalMessage: "Se niegan a hablar contigo. Tu viaje termina aqu\u00ed.",
+    trueEnding: "Final Verdadero",
+    trueEndingMessage: "Tu empat\u00eda revel\u00f3 la verdad m\u00e1s profunda...",
+    coldEndingMessage: "La historia termina en silencio y desconfianza...",
+    trustGain: "Confianza",
+    trustLoss: "Confianza",
   },
   pt: {
     loading: "Carregando...",
@@ -229,6 +265,13 @@ const I18N: Record<string, I18nStrings> = {
     finalTrust: "Confian\u00e7a final",
     endingMessage: "A hist\u00f3ria termina aqui, mas as consequ\u00eancias de suas escolhas perduram...",
     endStory: "Terminar a Hist\u00f3ria",
+    betrayalTitle: "Confian\u00e7a Quebrada",
+    betrayalMessage: "Eles se recusam a falar com voc\u00ea. Sua jornada termina aqui.",
+    trueEnding: "Final Verdadeiro",
+    trueEndingMessage: "Sua empatia revelou a verdade mais profunda...",
+    coldEndingMessage: "A hist\u00f3ria termina em sil\u00eancio e desconfian\u00e7a...",
+    trustGain: "Confian\u00e7a",
+    trustLoss: "Confian\u00e7a",
   },
 };
 
@@ -246,7 +289,7 @@ function withLang(msg: string, lang: string): string {
   return `${msg}\n[LANGUAGE] You MUST respond ONLY in ${name}. Not a single word in another language.`;
 }
 
-type Screen = "title" | "intro" | "game" | "puzzle" | "death" | "end";
+type Screen = "title" | "intro" | "game" | "puzzle" | "death" | "betrayal" | "end";
 
 interface GameState {
   [key: string]: unknown;
@@ -333,6 +376,7 @@ function QuestForgeGame() {
   });
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+  const [trustDelta, setTrustDelta] = useState<number | null>(null);
 
   // Audio refs
   const narrationAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -518,17 +562,44 @@ function QuestForgeGame() {
 
       playSfx("transition");
 
+      // Calculate trust delta from exit archetype
+      const exitTrustDelta = exit.trustImpact ?? 0;
+      const newTrust = Math.max(0, Math.min(10, gameState.trustLevel + exitTrustDelta));
+
       try {
         const result = await callToolAsync({
           gameId: gameData.gameId,
           previousSceneId: gameState.currentScene.id,
           exitChoiceId: exit.id,
           storyMemory: gameState.storyMemory,
-          trustLevel: gameState.trustLevel,
+          trustLevel: newTrust,
           sceneCount: gameState.sceneCount,
         });
 
-        const { scene, speakingNpcName, isEnding, trustLevel, narrationAudioUrl, musicAudioUrl } = result.structuredContent;
+        const { scene, speakingNpcName, isEnding, narrationAudioUrl, musicAudioUrl } = result.structuredContent;
+
+        // Show trust toast if delta is non-zero
+        if (exitTrustDelta !== 0) {
+          setTrustDelta(exitTrustDelta);
+        }
+
+        // Check for betrayal (trust dropped to 0)
+        if (newTrust <= 0) {
+          setIsTransitioning(true);
+          setTimeout(() => {
+            setGameState((prev) => ({
+              ...prev,
+              currentScene: scene,
+              speakingNpcName,
+              sceneCount: prev.sceneCount + 1,
+              trustLevel: newTrust,
+              visitedSceneIds: [...prev.visitedSceneIds, scene.id],
+              screen: "betrayal",
+            }));
+            setIsTransitioning(false);
+          }, 400);
+          return;
+        }
 
         // Visual transition
         setIsTransitioning(true);
@@ -539,7 +610,7 @@ function QuestForgeGame() {
               currentScene: scene,
               speakingNpcName,
               sceneCount: prev.sceneCount + 1,
-              trustLevel,
+              trustLevel: newTrust,
               visitedSceneIds: [...prev.visitedSceneIds, scene.id],
               screen: "puzzle",
               puzzleAttempts: scene.puzzle!.maxAttempts,
@@ -551,7 +622,7 @@ function QuestForgeGame() {
               currentScene: scene,
               speakingNpcName,
               sceneCount: prev.sceneCount + 1,
-              trustLevel,
+              trustLevel: newTrust,
               visitedSceneIds: [...prev.visitedSceneIds, scene.id],
               screen: isEnding ? "end" : "game",
             }));
@@ -638,7 +709,12 @@ function QuestForgeGame() {
             `[PUZZLE SOLVED] The player solved the challenge "${puzzle.title}". Congratulate them briefly in 1-2 lines as ${gameState.speakingNpcName}.`,
             gameData.language,
           ));
-          setGameState((prev) => ({ ...prev, screen: "game" }));
+          setTrustDelta(2);
+          setGameState((prev) => ({
+            ...prev,
+            screen: "game",
+            trustLevel: Math.min(10, prev.trustLevel + 2),
+          }));
         } else if (puzzleResult === "failure") {
           playSfx("failure");
           if (consequence === "death") {
@@ -648,11 +724,21 @@ function QuestForgeGame() {
               `[PUZZLE FAILED] The player failed the challenge. Express your disappointment in 1-2 lines as ${gameState.speakingNpcName}.`,
               gameData.language,
             ));
-            setGameState((prev) => ({
-              ...prev,
-              screen: "game",
-              trustLevel: Math.max(1, prev.trustLevel - 3),
-            }));
+            const newPuzzleTrust = Math.max(0, gameState.trustLevel - 2);
+            setTrustDelta(-2);
+            if (newPuzzleTrust <= 0) {
+              setGameState((prev) => ({
+                ...prev,
+                screen: "betrayal",
+                trustLevel: 0,
+              }));
+            } else {
+              setGameState((prev) => ({
+                ...prev,
+                screen: "game",
+                trustLevel: newPuzzleTrust,
+              }));
+            }
           }
         } else if (puzzleResult === "wrong") {
           playSfx("failure");
@@ -759,6 +845,14 @@ function QuestForgeGame() {
           t={t}
         />
       )}
+      {gameState.screen === "betrayal" && (
+        <BetrayalScreen
+          gameData={gameData}
+          gameState={gameState}
+          isTransitioning={isTransitioning}
+          t={t}
+        />
+      )}
       {gameState.screen === "end" && (
         <EndScreen
           gameData={gameData}
@@ -768,7 +862,12 @@ function QuestForgeGame() {
         />
       )}
 
-      {/* Audio mute toggle - visible on game, puzzle, death, end screens */}
+      {/* Trust change toast */}
+      {trustDelta !== null && (
+        <TrustToast delta={trustDelta} onHide={() => setTrustDelta(null)} t={t} />
+      )}
+
+      {/* Audio mute toggle - visible on game, puzzle, death, betrayal, end screens */}
       {gameState.screen !== "title" && gameState.screen !== "intro" && (
         <button
           onClick={() => setIsMuted((prev) => !prev)}
@@ -1098,6 +1197,12 @@ function GameScreen({
                   <div className="flex items-center gap-2">
                     <span className="text-lg">{exit.icon || ["🔥", "🤔", "⚔️"][idx % 3]}</span>
                     <span className="text-[#f0e6d0] text-sm font-medium">{exit.description}</span>
+                    {exit.trustImpact !== undefined && exit.trustImpact > 0 && (
+                      <span className="text-[#c4a747] text-xs font-bold ml-auto shrink-0">🤝</span>
+                    )}
+                    {exit.trustImpact !== undefined && exit.trustImpact < 0 && (
+                      <span className="text-red-400 text-xs font-bold ml-auto shrink-0">⚔️</span>
+                    )}
                   </div>
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#c4a747]/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
                 </button>
@@ -1466,6 +1571,99 @@ function DeathScreen({
 }
 
 // ═══════════════════════════════════════
+// BETRAYAL SCREEN (Trust = 0 Game Over)
+// ═══════════════════════════════════════
+
+function BetrayalScreen({
+  gameData,
+  gameState,
+  isTransitioning,
+  t,
+}: {
+  gameData: GameData;
+  gameState: GameState;
+  isTransitioning: boolean;
+  t: I18nStrings;
+}) {
+  const sendFollowUpMessage = useSendFollowUpMessage();
+
+  useEffect(() => {
+    const npcName = gameState.speakingNpcName || "the NPC";
+    sendFollowUpMessage(withLang(
+      `[TRUST BROKEN] The player's trust has fallen to zero. ${npcName} REFUSES to speak and dismisses the player coldly in 1-2 lines. This is a permanent rejection — the story is over.`,
+      gameData.language,
+    ));
+  }, [gameData.language, gameState.speakingNpcName, sendFollowUpMessage]);
+
+  const scene = gameState.currentScene;
+
+  return (
+    <div className={`betrayal-screen screen-enter w-full h-full relative overflow-hidden rounded-2xl ${isTransitioning ? "opacity-0 scale-95" : ""} transition-all duration-400`}>
+      <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${scene.backgroundUrl})` }} />
+      <div className="absolute inset-0 bg-gradient-to-t from-blue-950/95 via-gray-900/90 to-black/80" />
+
+      <div className="relative z-10 h-full flex flex-col items-center justify-center p-6 text-center">
+        <div className="text-6xl mb-4">🪞</div>
+        <h2 className="text-3xl md:text-4xl font-bold text-blue-300 mb-4">
+          {t.betrayalTitle}
+        </h2>
+        <p className="text-[#f0e6d0] text-sm md:text-base mb-2 max-w-md italic">
+          {t.betrayalMessage}
+        </p>
+
+        {/* Stats */}
+        <div className="mt-6 grid grid-cols-2 gap-6">
+          <div className="bg-black/60 backdrop-blur-sm rounded-lg p-4 border border-blue-400/30">
+            <div className="text-3xl font-bold text-blue-300">{gameState.sceneCount}</div>
+            <div className="text-[#8a8a9a] text-sm">{t.scenesLived}</div>
+          </div>
+          <div className="bg-black/60 backdrop-blur-sm rounded-lg p-4 border border-blue-400/30">
+            <div className="text-3xl font-bold text-blue-300">0/10</div>
+            <div className="text-[#8a8a9a] text-sm">{t.finalTrust}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════
+// TRUST TOAST
+// ═══════════════════════════════════════
+
+function TrustToast({
+  delta,
+  onHide,
+  t,
+}: {
+  delta: number;
+  onHide: () => void;
+  t: I18nStrings;
+}) {
+  const [hiding, setHiding] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setHiding(true);
+      setTimeout(onHide, 500);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [onHide]);
+
+  const isGain = delta > 0;
+  const label = isGain ? t.trustGain : t.trustLoss;
+
+  return (
+    <div className={`absolute top-14 left-1/2 -translate-x-1/2 z-50 ${hiding ? "achievement-toast hiding" : "achievement-toast"} ${isGain ? "" : "trust-toast-loss"} bg-black/90 backdrop-blur-sm border ${isGain ? "border-[#c4a747]/60" : "border-red-400/60"} rounded-lg px-4 py-2 flex items-center gap-2`}>
+      <span className={`text-lg font-bold ${isGain ? "text-[#c4a747]" : "text-red-400"}`}>
+        {isGain ? `+${delta}` : delta}
+      </span>
+      <span className="text-[#f0e6d0] text-sm">{label}</span>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════
 // END SCREEN
 // ═══════════════════════════════════════
 
@@ -1482,14 +1680,24 @@ function EndScreen({
 }) {
   const sendFollowUpMessage = useSendFollowUpMessage();
 
+  const isTrueEnding = gameState.trustLevel >= 9;
+  const isColdEnding = gameState.trustLevel <= 3;
+
   useEffect(() => {
     const npcName = gameState.speakingNpcName || "the narrator";
-    sendFollowUpMessage(withLang(
-      `The story "${gameData.title}" has ended after ${gameState.sceneCount} scenes. ` +
-      `Give a narrative conclusion as ${npcName}.`,
-      gameData.language,
-    ));
-  }, [gameData.title, gameData.language, gameState.sceneCount, gameState.speakingNpcName, sendFollowUpMessage]);
+    let conclusionContext: string;
+    if (isTrueEnding) {
+      conclusionContext = `TRUE ENDING. The player reached trust ${gameState.trustLevel}/10. Give an intimate, revelatory conclusion as ${npcName} that rewards the player's empathy. Reveal the deepest truth.`;
+    } else if (isColdEnding) {
+      conclusionContext = `Trust was very low (${gameState.trustLevel}/10). Give a cold, distant conclusion as ${npcName}. The relationship was never truly formed.`;
+    } else {
+      conclusionContext = `The story "${gameData.title}" has ended after ${gameState.sceneCount} scenes. Give a narrative conclusion as ${npcName}.`;
+    }
+    sendFollowUpMessage(withLang(conclusionContext, gameData.language));
+  }, [gameData.title, gameData.language, gameState.sceneCount, gameState.speakingNpcName, gameState.trustLevel, isTrueEnding, isColdEnding, sendFollowUpMessage]);
+
+  const endingTitle = isTrueEnding ? t.trueEnding : t.endOfAdventure;
+  const endingMessage = isTrueEnding ? t.trueEndingMessage : isColdEnding ? t.coldEndingMessage : t.endingMessage;
 
   return (
     <div
@@ -1504,8 +1712,8 @@ function EndScreen({
 
       {/* Content */}
       <div className="relative z-10 h-full flex flex-col items-center justify-center p-6 text-center">
-        <h2 className="text-4xl md:text-5xl font-bold text-[#c4a747] mb-4 title-glow">
-          {t.endOfAdventure}
+        <h2 className={`text-4xl md:text-5xl font-bold mb-4 title-glow ${isTrueEnding ? "text-[#c4a747]" : isColdEnding ? "text-blue-300" : "text-[#c4a747]"}`}>
+          {endingTitle}
         </h2>
 
         <p className="text-[#f0e6d0] text-lg md:text-xl mb-8 max-w-md">
@@ -1514,18 +1722,18 @@ function EndScreen({
 
         {/* Stats */}
         <div className="grid grid-cols-2 gap-6 mb-8">
-          <div className="bg-black/60 backdrop-blur-sm rounded-lg p-4 border border-[#c4a747]/30">
+          <div className={`bg-black/60 backdrop-blur-sm rounded-lg p-4 border ${isTrueEnding ? "border-[#c4a747]/60 shadow-[0_0_20px_rgba(196,167,71,0.3)]" : "border-[#c4a747]/30"}`}>
             <div className="text-3xl font-bold text-[#c4a747]">{gameState.sceneCount}</div>
             <div className="text-[#8a8a9a] text-sm">{t.scenesLived}</div>
           </div>
-          <div className="bg-black/60 backdrop-blur-sm rounded-lg p-4 border border-[#c4a747]/30">
+          <div className={`bg-black/60 backdrop-blur-sm rounded-lg p-4 border ${isTrueEnding ? "border-[#c4a747]/60 shadow-[0_0_20px_rgba(196,167,71,0.3)]" : "border-[#c4a747]/30"}`}>
             <div className="text-3xl font-bold text-[#c4a747]">{gameState.trustLevel}/10</div>
             <div className="text-[#8a8a9a] text-sm">{t.finalTrust}</div>
           </div>
         </div>
 
         <p className="text-[#8a8a9a] text-sm italic max-w-md">
-          {t.endingMessage}
+          {endingMessage}
         </p>
       </div>
     </div>

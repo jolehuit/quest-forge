@@ -457,6 +457,33 @@
 }
 
 /* ═══════════════════════════════════════
+   TRUST TOAST
+   ═══════════════════════════════════════ */
+
+.trust-toast-loss {
+  box-shadow: 0 0 30px rgba(239, 68, 68, 0.4), 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+/* ═══════════════════════════════════════
+   BETRAYAL SCREEN
+   ═══════════════════════════════════════ */
+
+.betrayal-screen {
+  animation: betrayalFadeIn 0.8s ease-out forwards;
+}
+
+@keyframes betrayalFadeIn {
+  from {
+    opacity: 0;
+    filter: blur(10px) saturate(0.3);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0) saturate(1);
+  }
+}
+
+/* ═══════════════════════════════════════
    DEATH SCREEN
    ═══════════════════════════════════════ */
 
@@ -506,6 +533,21 @@
 
 .audio-toggle-btn:active {
   transform: scale(0.92);
+}
+
+/* ═══════════════════════════════════════
+   UPLOAD WIDGET
+   ═══════════════════════════════════════ */
+
+.upload-zone {
+  border: 2px dashed rgba(196, 167, 71, 0.4);
+  transition: all 0.3s;
+}
+
+.upload-zone:hover,
+.upload-zone.dragover {
+  border-color: #c4a747;
+  background: rgba(196, 167, 71, 0.05);
 }
 
 /* ========================================
