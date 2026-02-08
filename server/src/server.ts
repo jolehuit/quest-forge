@@ -104,16 +104,31 @@ const PuzzleSchema = z.object({
   ),
   title: z.string().describe("Name of the challenge"),
   description: z.string().describe("What the player sees as context for the challenge"),
-  // fill_in_blank specific
-  phrase: z.string().optional().describe("For fill_in_blank ONLY: the sentence with exactly one ___ as placeholder for the missing word"),
-  // lock_code specific
-  codeLength: z.number().min(3).max(6).optional().describe("For lock_code ONLY: number of characters in the code (3-6)"),
+  // fill_in_blank specific - REQUIRED when type is fill_in_blank
+  phrase: z.string().optional().describe("For fill_in_blank ONLY (REQUIRED): the sentence with exactly one ___ as placeholder for the missing word. OMIT for lock_code and riddle_dialogue."),
+  // lock_code specific - REQUIRED when type is lock_code
+  codeLength: z.number().min(3).max(6).optional().describe("For lock_code ONLY (REQUIRED): number of characters in the code (3-6). MUST be 3, 4, 5, or 6. OMIT completely for fill_in_blank and riddle_dialogue - do NOT include this field."),
   acceptedAnswers: z.array(z.string()).min(1).max(5).describe("Accepted answers (case-insensitive and accent-insensitive comparison). IMPORTANT: hints must NEVER contain these answers."),
   hints: z.array(z.string()).min(2).max(3).describe("CRYPTIC and PROGRESSIVE hints. The 1st is very vague, the last is more precise but must NEVER contain the direct answer. These hints are the ONLY information the NPC can give."),
   maxAttempts: z.number().min(1).max(5).default(3),
   failureConsequence: z.enum(["death", "trust_loss"]),
   visualTheme: z.enum(["ancient_runes", "locked_door", "magic_mirror", "shadow_trial", "potion_choice"]),
-});
+}).refine(
+  (data) => {
+    // phrase is required for fill_in_blank
+    if (data.type === "fill_in_blank" && !data.phrase) return false;
+    // codeLength is required for lock_code
+    if (data.type === "lock_code" && data.codeLength === undefined) return false;
+    // phrase should NOT be present for other types
+    if (data.type !== "fill_in_blank" && data.phrase) return false;
+    // codeLength should NOT be present for other types
+    if (data.type !== "lock_code" && data.codeLength !== undefined) return false;
+    return true;
+  },
+  {
+    message: "Puzzle fields must match type: fill_in_blank requires 'phrase', lock_code requires 'codeLength'. Do NOT include codeLength for fill_in_blank or riddle_dialogue.",
+  }
+);
 
 // Narrative scene — the core of the new system
 const NarrativeSceneSchema = z.object({
