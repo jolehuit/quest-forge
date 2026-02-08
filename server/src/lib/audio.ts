@@ -108,7 +108,7 @@ async function generateMusic(
         tags,
         lyrics_prompt: "", // empty = instrumental only
         output_format: "mp3",
-        output_bit_rate: "128",
+        output_bit_rate: 128 as unknown as "128", // API expects number despite SDK types
         num_songs: 1,
         prompt_strength: 2,
         balance_strength: 0.3, // sharper instrumentals
@@ -154,25 +154,52 @@ export function getNarratorVoice(
 // Music track generation — sequential to respect Fal concurrency
 // ═══════════════════════════════════════════════════════════
 
+// Map free-text tone descriptions to valid Sonauto tags
+// (tone comes from the LLM and can be in any language)
+const TONE_TO_TAGS: Record<string, string[]> = {
+  dark: ["dark", "melancholic"],
+  heroic: ["energetic", "uplifting"],
+  mysterious: ["ethereal", "dreamy"],
+  hopeful: ["uplifting", "warm"],
+  tense: ["dark", "atmospheric"],
+  somber: ["melancholic", "atmospheric"],
+  sombre: ["melancholic", "atmospheric"],
+  romantic: ["romantic", "passionate"],
+  playful: ["playful", "energetic"],
+  epic: ["energetic", "passionate"],
+  whimsical: ["playful", "dreamy"],
+  melancholic: ["melancholic", "ethereal"],
+  warm: ["warm", "romantic"],
+};
+
+function toneToTags(tone: string): string[] {
+  const lower = tone.toLowerCase();
+  for (const [keyword, tags] of Object.entries(TONE_TO_TAGS)) {
+    if (lower.includes(keyword)) return tags;
+  }
+  return ["atmospheric"];
+}
+
 export async function generateMusicTracks(
   genres: string[],
   tone: string,
 ): Promise<Map<string, string>> {
   const tracks = new Map<string, string>();
   const genre = genres[0] || "fantasy";
+  const toneTags = toneToTags(tone);
 
   const moods = [
     {
       key: "ambient",
-      tags: [genre, tone, "ambient", "atmospheric", "instrumental", "calm"],
+      tags: [...new Set([genre, ...toneTags, "ambient", "atmospheric", "instrumental"])],
     },
     {
       key: "tension",
-      tags: [genre, "dark", "tense", "suspenseful", "instrumental", "ominous"],
+      tags: [genre, "dark", "melancholic", "atmospheric", "instrumental"],
     },
     {
       key: "emotional",
-      tags: [genre, tone, "emotional", "hopeful", "warm", "instrumental"],
+      tags: [...new Set([genre, ...toneTags, "melodic", "uplifting", "warm", "instrumental"])],
     },
   ];
 
