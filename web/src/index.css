@@ -535,21 +535,6 @@
   transform: scale(0.92);
 }
 
-/* ═══════════════════════════════════════
-   UPLOAD WIDGET
-   ═══════════════════════════════════════ */
-
-.upload-zone {
-  border: 2px dashed rgba(196, 167, 71, 0.4);
-  transition: all 0.3s;
-}
-
-.upload-zone:hover,
-.upload-zone.dragover {
-  border-color: #c4a747;
-  background: rgba(196, 167, 71, 0.05);
-}
-
 /* ========================================
    REDUCED MOTION
    ======================================== */

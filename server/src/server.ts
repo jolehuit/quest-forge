@@ -1,7 +1,6 @@
 import crypto from "node:crypto";
 import { McpServer } from "skybridge/server";
 import { z } from "zod";
-import { fal } from "@fal-ai/client";
 import { generateCharacterPortrait, generateSceneBackground } from "./lib/fal.js";
 import { generateTTS, getNarratorVoice, generateMusicTracks, getMusicTrackForMood } from "./lib/audio.js";
 
@@ -39,10 +38,6 @@ const CharacterSchema = z.object({
     content: z.string(),
     unlockCondition: z.string(),
   })).optional().describe("Secrets this character hides"),
-  referenceImageUrl: z.string().url().optional().describe(
-    "Permanent fal CDN URL of a reference image uploaded by the user via quest-forge-upload. " +
-    "If provided, img2img will transform it into the game's art style."
-  ),
 });
 
 // Player character extends base character
@@ -232,14 +227,6 @@ EXIT FORMAT:
 - Each exit includes a nextScene object with setting, mood, situation, presentNPCIds, speakingNPCId
 - This data is used by the server to build the next scene without calling the LLM
 - Write rich, evocative situations (2-3 sentences) and specific settings for good Fal AI backgrounds
-
-REFERENCE IMAGES:
-- Characters can have an optional referenceImageUrl field
-- This URL must come from the quest-forge-upload widget (fal CDN permanent URL)
-- BEFORE calling this tool, ask the user if they want to provide reference images for characters
-- If yes, call quest-forge-upload first, wait for the permanent URLs, then use them as referenceImageUrl
-- If a referenceImageUrl is provided, the server uses img2img (flux-2/edit) to transform it into the game's art style
-- If no referenceImageUrl, the server generates portraits from scratch using txt2img (flux/dev)
 
 IMPORTANT: After calling this tool, do NOT output any text. The game widget handles everything. Wait in silence until the game sends you a message.`;
 
@@ -493,103 +480,6 @@ const SHARED_CSP = {
 };
 
 const server = new McpServer({ name: "quest-forge", version: "0.1.0" }, { capabilities: {} })
-  // ═══════════════════════════════════════════════════════════
-  // Tool: quest-forge-upload (reference image upload widget)
-  // ═══════════════════════════════════════════════════════════
-  .registerWidget(
-    "quest-forge-upload",
-    {
-      description: "Quest Forge — Upload Reference Images",
-      _meta: {
-        ui: {
-          csp: {
-            resourceDomains: [
-              "https://fal.media",
-              "https://*.fal.media",
-              "https://*.oaiusercontent.com",
-              ...(r2PublicUrl ? [r2PublicUrl] : []),
-            ],
-          },
-        },
-      },
-    },
-    {
-      description:
-        "Show the reference image upload widget. Call this ONLY when the user explicitly wants to provide reference images for characters. " +
-        "After the upload is complete, the widget will send a message with permanent fal CDN image URLs. " +
-        "Use those URLs as referenceImageUrl for matching characters when calling quest-forge-game. " +
-        "Do NOT call this if the user declines to provide reference images.",
-      inputSchema: {},
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        openWorldHint: false,
-      },
-      _meta: {
-        "openai/toolInvocation/invoking": "Preparing upload widget...",
-        "openai/toolInvocation/invoked": "Upload widget ready!",
-      },
-    },
-    async () => {
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: "The reference image upload widget is now displayed. Wait for the user to upload images and click Done. The widget will send a follow-up message with the permanent fal CDN URLs.",
-          },
-        ],
-        isError: false,
-      };
-    },
-  )
-
-  // ═══════════════════════════════════════════════════════════
-  // Tool: quest-forge-store-uploads (store images on fal CDN)
-  // ═══════════════════════════════════════════════════════════
-  .registerTool(
-    "quest-forge-store-uploads",
-    {
-      description: "Store uploaded reference images on fal CDN for permanent URLs. Called by the upload widget.",
-      inputSchema: {
-        images: z.array(z.object({
-          label: z.string(),
-          downloadUrl: z.string().url(),
-        })).min(1).max(5),
-      },
-      _meta: { "openai/widgetAccessible": true },
-    },
-    async (args) => {
-      const input = args as { images: { label: string; downloadUrl: string }[] };
-      try {
-        const results = await Promise.all(
-          input.images.map(async (img) => {
-            const response = await fetch(img.downloadUrl);
-            if (!response.ok) throw new Error(`Failed to fetch ${img.downloadUrl}: ${response.status}`);
-            const buffer = Buffer.from(await response.arrayBuffer());
-            const blob = new Blob([buffer], { type: response.headers.get("content-type") || "image/png" });
-            const url = await fal.storage.upload(blob);
-            return { label: img.label, url };
-          })
-        );
-        return {
-          structuredContent: { images: results },
-          content: [
-            {
-              type: "text" as const,
-              text: `Stored ${results.length} reference image(s) on fal CDN: ${results.map(r => `${r.label} -> ${r.url}`).join(", ")}`,
-            },
-          ],
-          isError: false,
-        };
-      } catch (error) {
-        return {
-          content: [{ type: "text" as const, text: `Error storing uploads: ${error}` }],
-          isError: true,
-        };
-      }
-    },
-  )
-
   // ═══════════════════════════════════════════════════════════
   // Tool: quest-forge-game (create & play narrative visual novel)
   // ═══════════════════════════════════════════════════════════
