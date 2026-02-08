@@ -20,12 +20,26 @@ const LANGUAGE_NAMES: Record<string, string> = {
 // NEW NARRATIVE SYSTEM — Multi-character dynamic scenes
 // ═══════════════════════════════════════════════════════════
 
+// Helper to convert string booleans to actual booleans (LLM sometimes sends "True", "yes", etc.)
+const FlexibleBoolean = z.preprocess(
+  (val) => {
+    if (typeof val === "boolean") return val;
+    if (typeof val === "string") {
+      const lower = val.toLowerCase().trim();
+      if (lower === "true" || lower === "yes" || lower === "1") return true;
+      if (lower === "false" || lower === "no" || lower === "0") return false;
+    }
+    return val;
+  },
+  z.boolean()
+);
+
 // Character schema — supports player character and NPCs
 const CharacterSchema = z.object({
   id: z.string(),
   name: z.string(),
-  isPlayer: z.boolean().describe("true = player character (left side), false = NPC (right side)"),
-  isPrimary: z.boolean().describe("true = main character of the story"),
+  isPlayer: FlexibleBoolean.describe("true = player character (left side), false = NPC (right side)"),
+  isPrimary: FlexibleBoolean.describe("true = main character of the story"),
   appearance: z.string().describe("Physical description for portrait generation"),
   personality: z.string().describe("Brief personality description"),
   voice: z.object({
@@ -48,7 +62,9 @@ const CharacterSchema = z.object({
 
 // Player character extends base character
 const PlayerCharacterSchema = CharacterSchema.extend({
-  isPlayer: z.literal(true),
+  isPlayer: FlexibleBoolean.refine((val) => val === true, {
+    message: "isPlayer must be true for player character",
+  }),
   innerConflict: z.string().describe("Internal struggle of the character"),
   motivation: z.string().describe("What drives them"),
   background: z.string().describe("Personal history"),
@@ -76,7 +92,7 @@ const SceneExitSchema = z.object({
 const SceneCharacterSchema = z.object({
   characterId: z.string(),
   position: z.enum(["left", "right", "center"]).describe("Screen position"),
-  isSpeaking: z.boolean().describe("Whether this character is currently speaking"),
+  isSpeaking: FlexibleBoolean.describe("Whether this character is currently speaking"),
   emotionalState: z.string(),
 });
 
@@ -113,7 +129,7 @@ const NarrativeSceneSchema = z.object({
   playerCharacterId: z.string(),
   situation: z.string().describe("What's happening in this scene"),
   exits: z.array(SceneExitSchema).min(0).max(3).describe("0-3 choices to progress (0 for ending scenes)"),
-  isEnding: z.boolean().describe("true = final scene of the story"),
+  isEnding: FlexibleBoolean.describe("true = final scene of the story"),
   puzzle: PuzzleSchema.optional().describe("If present, the player must solve this challenge before continuing"),
 });
 
