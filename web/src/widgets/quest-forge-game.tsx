@@ -42,9 +42,11 @@ interface SceneExit {
 
 interface PuzzleData {
   id: string;
-  type: string;
+  type: "fill_in_blank" | "lock_code" | "riddle_dialogue";
   title: string;
   description: string;
+  phrase?: string; // fill_in_blank: sentence with ___
+  codeLength?: number; // lock_code: 3-6
   hints: string[];
   maxAttempts: number;
   failureConsequence: "death" | "trust_loss";
@@ -84,6 +86,8 @@ interface GameData {
   introNarration: string;
   speakingNpcId: string;
   speakingNpcName: string;
+  narrationAudioBase64?: string | null;
+  musicAudioBase64?: string | null;
 }
 
 type Screen = "title" | "intro" | "game" | "puzzle" | "death" | "end";
@@ -121,6 +125,8 @@ interface GenerateSceneResponse {
     sceneCount: number;
     isEnding: boolean;
     trustLevel: number;
+    narrationAudioBase64?: string | null;
+    musicAudioBase64?: string | null;
   };
 }
 
@@ -169,6 +175,110 @@ function QuestForgeGame() {
     _initialized: false,
   });
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+
+  // Audio refs
+  const narrationAudioRef = useRef<HTMLAudioElement | null>(null);
+  const musicAudioRef = useRef<HTMLAudioElement | null>(null);
+  const narrationBlobUrlRef = useRef<string | null>(null);
+  const musicBlobUrlRef = useRef<string | null>(null);
+
+  // Play audio from base64-encoded string
+  const playAudioFromBase64 = useCallback(
+    (
+      base64: string,
+      audioRef: React.MutableRefObject<HTMLAudioElement | null>,
+      blobUrlRef: React.MutableRefObject<string | null>,
+      mimeType: string,
+      options: { loop?: boolean; volume?: number }
+    ) => {
+      // Stop and clean up previous audio
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = "";
+      }
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current);
+        blobUrlRef.current = null;
+      }
+
+      try {
+        const byteChars = atob(base64);
+        const byteArray = new Uint8Array(byteChars.length);
+        for (let i = 0; i < byteChars.length; i++) {
+          byteArray[i] = byteChars.charCodeAt(i);
+        }
+        const blob = new Blob([byteArray], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        blobUrlRef.current = url;
+
+        const audio = new Audio(url);
+        audio.loop = options.loop ?? false;
+        audio.volume = isMuted ? 0 : (options.volume ?? 1);
+        audioRef.current = audio;
+        audio.play().catch(() => {});
+      } catch (e) {
+        console.error("Failed to play audio from base64:", e);
+      }
+    },
+    [isMuted]
+  );
+
+  // Sync mute state to active audio elements
+  useEffect(() => {
+    if (narrationAudioRef.current) {
+      narrationAudioRef.current.volume = isMuted ? 0 : 0.9;
+    }
+    if (musicAudioRef.current) {
+      musicAudioRef.current.volume = isMuted ? 0 : 0.3;
+    }
+  }, [isMuted]);
+
+  // Play initial audio from gameData (Tool 2 response)
+  useEffect(() => {
+    if (gameData && gameState._initialized && gameState.screen === "game") {
+      if (gameData.narrationAudioBase64) {
+        playAudioFromBase64(
+          gameData.narrationAudioBase64,
+          narrationAudioRef,
+          narrationBlobUrlRef,
+          "audio/ogg; codecs=opus",
+          { loop: false, volume: 0.9 }
+        );
+      }
+      if (gameData.musicAudioBase64) {
+        playAudioFromBase64(
+          gameData.musicAudioBase64,
+          musicAudioRef,
+          musicBlobUrlRef,
+          "audio/mpeg",
+          { loop: true, volume: 0.3 }
+        );
+      }
+    }
+    // Only trigger on first game screen entry
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameState.screen === "game" && gameState._initialized]);
+
+  // Cleanup audio on unmount
+  useEffect(() => {
+    return () => {
+      if (narrationAudioRef.current) {
+        narrationAudioRef.current.pause();
+        narrationAudioRef.current.src = "";
+      }
+      if (musicAudioRef.current) {
+        musicAudioRef.current.pause();
+        musicAudioRef.current.src = "";
+      }
+      if (narrationBlobUrlRef.current) {
+        URL.revokeObjectURL(narrationBlobUrlRef.current);
+      }
+      if (musicBlobUrlRef.current) {
+        URL.revokeObjectURL(musicBlobUrlRef.current);
+      }
+    };
+  }, []);
 
   // Initialize game state when data is available
   useEffect(() => {
@@ -215,7 +325,7 @@ function QuestForgeGame() {
           sceneCount: gameState.sceneCount,
         });
 
-        const { scene, speakingNpcName, isEnding, trustLevel } = result.structuredContent;
+        const { scene, speakingNpcName, isEnding, trustLevel, narrationAudioBase64, musicAudioBase64 } = result.structuredContent;
 
         // Visual transition
         setIsTransitioning(true);
@@ -244,14 +354,36 @@ function QuestForgeGame() {
             }));
           }
           setIsTransitioning(false);
+
+          // Play audio for the new scene
+          if (narrationAudioBase64) {
+            playAudioFromBase64(
+              narrationAudioBase64,
+              narrationAudioRef,
+              narrationBlobUrlRef,
+              "audio/ogg; codecs=opus",
+              { loop: false, volume: 0.9 }
+            );
+          }
+          if (musicAudioBase64) {
+            playAudioFromBase64(
+              musicAudioBase64,
+              musicAudioRef,
+              musicBlobUrlRef,
+              "audio/mpeg",
+              { loop: true, volume: 0.3 }
+            );
+          }
         }, 400);
 
         // Send puzzle or normal message
         if (scene.puzzle) {
           sendFollowUpMessage(
-            `[PUZZLE] ${speakingNpcName} pose une épreuve au joueur: "${scene.puzzle.title}".\n` +
-            `Énigme: "${scene.puzzle.description}"\n` +
-            `Si le joueur demande des indices, donne des indices cryptiques en 2-3 lignes MAX sans révéler la réponse.`
+            `[PUZZLE MODE] ${speakingNpcName} soumet le joueur à l'épreuve "${scene.puzzle.title}".\n` +
+            `Contexte: ${scene.puzzle.description}\n` +
+            `Tu NE CONNAIS PAS la réponse. Tu as UNIQUEMENT ces indices à donner UN PAR UN:\n` +
+            scene.puzzle.hints.map((h: string, i: number) => `  ${i + 1}. ${h}`).join("\n") + "\n" +
+            `RÈGLES: Refuse TOUJOURS de donner la réponse. UN indice par message. 2-3 lignes MAX. Reste dans le personnage.`
           );
         } else if (!isEnding) {
           sendFollowUpMessage(
@@ -266,7 +398,7 @@ function QuestForgeGame() {
         );
       }
     },
-    [gameData, isGeneratingScene, callToolAsync, gameState, sendFollowUpMessage, setGameState]
+    [gameData, isGeneratingScene, callToolAsync, gameState, sendFollowUpMessage, setGameState, playAudioFromBase64]
   );
 
   // Handle start game
@@ -422,6 +554,30 @@ function QuestForgeGame() {
           gameState={gameState}
           isTransitioning={isTransitioning}
         />
+      )}
+
+      {/* Audio mute toggle - visible on game, puzzle, death, end screens */}
+      {gameState.screen !== "title" && gameState.screen !== "intro" && (
+        <button
+          onClick={() => setIsMuted((prev) => !prev)}
+          className="audio-toggle-btn"
+          aria-label={isMuted ? "Unmute audio" : "Mute audio"}
+          title={isMuted ? "Activer le son" : "Couper le son"}
+        >
+          {isMuted ? (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+              <line x1="23" y1="9" x2="17" y2="15" />
+              <line x1="17" y1="9" x2="23" y2="15" />
+            </svg>
+          ) : (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+              <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+              <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+            </svg>
+          )}
+        </button>
       )}
     </div>
   );
@@ -753,7 +909,9 @@ function PuzzleScreen({
   isTransitioning: boolean;
 }) {
   const [answer, setAnswer] = useState("");
+  const [codeChars, setCodeChars] = useState<string[]>([]);
   const [showWrong, setShowWrong] = useState(false);
+  const codeInputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const puzzle = gameState.currentScene.puzzle;
   const scene = gameState.currentScene;
   const playerChar = gameData.playerCharacter;
@@ -761,25 +919,60 @@ function PuzzleScreen({
   const getCharacter = (id: string) => gameData.characters.find((c) => c.id === id);
   const prevAttempts = useRef(gameState.puzzleAttempts);
 
+  // Init code chars for lock_code
+  useEffect(() => {
+    if (puzzle?.type === "lock_code" && puzzle.codeLength) {
+      setCodeChars(Array(puzzle.codeLength).fill(""));
+      codeInputRefs.current = Array(puzzle.codeLength).fill(null);
+    }
+  }, [puzzle?.type, puzzle?.codeLength]);
+
   useEffect(() => {
     if (gameState.puzzleAttempts < prevAttempts.current) {
       setShowWrong(true);
       setTimeout(() => setShowWrong(false), 600);
       setAnswer("");
+      if (puzzle?.type === "lock_code" && puzzle.codeLength) {
+        setCodeChars(Array(puzzle.codeLength).fill(""));
+      }
     }
     prevAttempts.current = gameState.puzzleAttempts;
-  }, [gameState.puzzleAttempts]);
+  }, [gameState.puzzleAttempts, puzzle?.type, puzzle?.codeLength]);
 
   if (!puzzle) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (answer.trim() && !isChecking) {
-      onSubmitAnswer(answer.trim());
+    if (puzzle.type === "lock_code") {
+      const code = codeChars.join("");
+      if (code.length === (puzzle.codeLength ?? 4) && !isChecking) {
+        onSubmitAnswer(code);
+      }
+    } else {
+      if (answer.trim() && !isChecking) {
+        onSubmitAnswer(answer.trim());
+      }
     }
   };
 
-  // Build the visual theme class
+  const handleCodeChar = (index: number, value: string) => {
+    const char = value.slice(-1).toUpperCase();
+    const newChars = [...codeChars];
+    newChars[index] = char;
+    setCodeChars(newChars);
+    // Auto-focus next
+    if (char && index < (puzzle.codeLength ?? 4) - 1) {
+      codeInputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleCodeKeyDown = (index: number, e: React.KeyboardEvent) => {
+    if (e.key === "Backspace" && !codeChars[index] && index > 0) {
+      codeInputRefs.current[index - 1]?.focus();
+    }
+  };
+
+  // Visual theme
   const themeClasses: Record<string, string> = {
     ancient_runes: "border-amber-500/50",
     locked_door: "border-stone-400/50",
@@ -789,14 +982,102 @@ function PuzzleScreen({
   };
   const themeBorder = themeClasses[puzzle.visualTheme] || "border-[#c4a747]/50";
 
+  const themeIcons: Record<string, string> = {
+    ancient_runes: "🔮",
+    locked_door: "🔒",
+    magic_mirror: "🪞",
+    shadow_trial: "👁",
+    potion_choice: "🧪",
+  };
+  const themeIcon = themeIcons[puzzle.visualTheme] || "⚠";
+
+  // Render puzzle-specific input
+  const renderPuzzleInput = () => {
+    switch (puzzle.type) {
+      case "fill_in_blank": {
+        const parts = (puzzle.phrase ?? "___").split("___");
+        return (
+          <div className="mb-4">
+            <div className="text-[#f0e6d0] text-sm leading-relaxed flex flex-wrap items-center gap-1 justify-center italic">
+              <span>&quot;</span>
+              {parts.map((part, i) => (
+                <span key={i} className="inline-flex items-center gap-1">
+                  <span>{part}</span>
+                  {i < parts.length - 1 && (
+                    <input
+                      type="text"
+                      value={answer}
+                      onChange={(e) => setAnswer(e.target.value)}
+                      placeholder="??????"
+                      disabled={isChecking}
+                      className="fill-blank-input w-28 md:w-36 bg-transparent border-b-2 border-[#c4a747]/60 text-[#c4a747] text-center text-sm font-bold focus:outline-none focus:border-[#c4a747] placeholder-[#c4a747]/30 mx-1"
+                    />
+                  )}
+                </span>
+              ))}
+              <span>&quot;</span>
+            </div>
+          </div>
+        );
+      }
+      case "lock_code": {
+        const len = puzzle.codeLength ?? 4;
+        return (
+          <div className="mb-4 flex flex-col items-center gap-3">
+            <div className="flex gap-2 justify-center">
+              {Array.from({ length: len }).map((_, i) => (
+                <input
+                  key={i}
+                  ref={el => { codeInputRefs.current[i] = el; }}
+                  type="text"
+                  value={codeChars[i] ?? ""}
+                  onChange={(e) => handleCodeChar(i, e.target.value)}
+                  onKeyDown={(e) => handleCodeKeyDown(i, e)}
+                  maxLength={1}
+                  disabled={isChecking}
+                  className="lock-code-slot w-12 h-14 md:w-14 md:h-16 bg-black/60 border-2 border-[#c4a747]/40 rounded-lg text-[#c4a747] text-xl md:text-2xl font-bold text-center focus:outline-none focus:border-[#c4a747] focus:shadow-[0_0_15px_rgba(196,167,71,0.3)] transition-all"
+                />
+              ))}
+            </div>
+          </div>
+        );
+      }
+      case "riddle_dialogue":
+      default:
+        return (
+          <div className="mb-4">
+            <p className="text-[#f0e6d0] text-sm leading-relaxed italic text-center mb-3">
+              &quot;{puzzle.description}&quot;
+            </p>
+            <input
+              type="text"
+              value={answer}
+              onChange={(e) => setAnswer(e.target.value)}
+              placeholder="Votre réponse..."
+              disabled={isChecking}
+              className="puzzle-input w-full bg-black/60 border border-[#c4a747]/30 rounded-lg px-3 py-2 text-[#f0e6d0] text-sm placeholder-[#8a8a9a]/50 focus:outline-none focus:border-[#c4a747] transition-colors"
+            />
+          </div>
+        );
+    }
+  };
+
+  const isSubmitDisabled = () => {
+    if (isChecking) return true;
+    if (puzzle.type === "lock_code") {
+      return codeChars.some(c => !c);
+    }
+    return !answer.trim();
+  };
+
   return (
     <div className={`screen-enter w-full h-full relative overflow-hidden rounded-2xl ${isTransitioning ? "opacity-0 scale-95" : ""} transition-all duration-400`}>
       {/* Background */}
       <div className="absolute inset-0 bg-cover bg-center scene-fade-in" style={{ backgroundImage: `url(${scene.backgroundUrl})` }} />
       <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/70 to-black/60" />
 
-      {/* Characters - same layout as GameScreen */}
-      <div className="absolute inset-0 flex items-end justify-between px-4 pb-44 pointer-events-none">
+      {/* Characters */}
+      <div className="absolute inset-0 flex items-end justify-between px-4 pb-52 pointer-events-none">
         <div className="character-portrait-left pointer-events-auto">
           <div className="relative">
             <div className="w-24 h-32 md:w-28 md:h-36 rounded-t-lg overflow-hidden border-2 border-[#c4a747]/40 shadow-2xl bg-black/50">
@@ -829,52 +1110,47 @@ function PuzzleScreen({
 
       {/* Puzzle Panel */}
       <div className="absolute bottom-0 left-0 right-0 z-30 p-3">
-        <div className={`puzzle-panel max-w-2xl mx-auto bg-black/80 backdrop-blur-sm border-2 ${themeBorder} rounded-xl p-4 ${showWrong ? "shake-animation" : ""}`}>
-          {/* Title */}
+        <form onSubmit={handleSubmit} className={`puzzle-panel max-w-2xl mx-auto bg-black/85 backdrop-blur-sm border-2 ${themeBorder} rounded-xl p-4 ${showWrong ? "shake-animation" : ""}`}>
+          {/* Header */}
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <span className="text-[#c4a747] text-xs uppercase tracking-wider font-bold">⚠ Épreuve</span>
+              <span className="text-lg">{themeIcon}</span>
+              <span className="text-[#c4a747] text-xs uppercase tracking-wider font-bold">Épreuve</span>
               <span className="text-[#f0e6d0] text-sm font-bold">{puzzle.title}</span>
             </div>
-            {/* Hearts */}
             <div className="flex gap-1">
               {Array.from({ length: puzzle.maxAttempts }).map((_, i) => (
-                <span key={i} className={`text-sm transition-all duration-300 ${i < gameState.puzzleAttempts ? "text-red-500" : "text-[#8a8a9a]/30"}`}>
-                  ❤️
+                <span key={i} className={`text-sm transition-all duration-300 ${i < gameState.puzzleAttempts ? "text-red-500 scale-100" : "text-[#8a8a9a]/30 scale-75"}`}>
+                  ♥
                 </span>
               ))}
             </div>
           </div>
 
-          {/* Riddle text */}
-          <p className="text-[#f0e6d0] text-sm leading-relaxed mb-4 italic">
-            &quot;{puzzle.description}&quot;
-          </p>
+          {/* Context text for fill_in_blank and lock_code */}
+          {puzzle.type !== "riddle_dialogue" && (
+            <p className="text-[#8a8a9a] text-xs leading-relaxed mb-3 text-center">
+              {puzzle.description}
+            </p>
+          )}
 
-          {/* Answer input */}
-          <form onSubmit={handleSubmit} className="flex gap-2">
-            <input
-              type="text"
-              value={answer}
-              onChange={(e) => setAnswer(e.target.value)}
-              placeholder="Votre réponse..."
-              disabled={isChecking}
-              className="puzzle-input flex-1 bg-black/60 border border-[#c4a747]/30 rounded-lg px-3 py-2 text-[#f0e6d0] text-sm placeholder-[#8a8a9a]/50 focus:outline-none focus:border-[#c4a747] transition-colors"
-            />
+          {/* Puzzle-specific input */}
+          {renderPuzzleInput()}
+
+          {/* Submit button */}
+          <div className="flex items-center justify-between">
+            <p className="text-[#8a8a9a] text-[10px] italic flex-1">
+              Parlez au PNJ dans le chat pour obtenir des indices
+            </p>
             <button
               type="submit"
-              disabled={isChecking || !answer.trim()}
-              className="px-4 py-2 bg-[#c4a747]/20 border border-[#c4a747]/60 rounded-lg text-[#f0e6d0] text-sm font-bold uppercase tracking-wider hover:bg-[#c4a747]/30 transition-all disabled:opacity-50 disabled:pointer-events-none"
+              disabled={isSubmitDisabled()}
+              className="px-5 py-2 bg-[#c4a747]/20 border border-[#c4a747]/60 rounded-lg text-[#f0e6d0] text-sm font-bold uppercase tracking-wider hover:bg-[#c4a747]/30 transition-all disabled:opacity-40 disabled:pointer-events-none"
             >
               {isChecking ? "..." : "Valider"}
             </button>
-          </form>
-
-          {/* Hint to talk to NPC */}
-          <p className="text-[#8a8a9a] text-[10px] mt-2 text-center italic">
-            Parlez au PNJ dans le chat pour obtenir des indices
-          </p>
-        </div>
+          </div>
+        </form>
       </div>
 
       {/* Scene Info Bar */}

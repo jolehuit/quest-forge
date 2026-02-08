@@ -413,6 +413,38 @@
   box-shadow: 0 0 0 1px rgba(196, 167, 71, 0.3), 0 0 15px rgba(196, 167, 71, 0.1);
 }
 
+/* Fill-in-blank inline input */
+.fill-blank-input {
+  caret-color: #c4a747;
+  transition: border-color 0.3s ease;
+}
+
+.fill-blank-input:focus {
+  border-color: #c4a747;
+  text-shadow: 0 0 8px rgba(196, 167, 71, 0.4);
+}
+
+.fill-blank-input::placeholder {
+  letter-spacing: 0.15em;
+}
+
+/* Lock code slot */
+.lock-code-slot {
+  caret-color: #c4a747;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+}
+
+.lock-code-slot:focus {
+  border-color: #c4a747;
+  box-shadow: 0 0 15px rgba(196, 167, 71, 0.3), inset 0 0 8px rgba(196, 167, 71, 0.1);
+  transform: scale(1.05);
+}
+
+.lock-code-slot::selection {
+  background: rgba(196, 167, 71, 0.3);
+}
+
 /* Shake animation for wrong answers */
 .shake-animation {
   animation: puzzleShake 0.5s ease-in-out;
@@ -441,6 +473,39 @@
     opacity: 1;
     filter: blur(0);
   }
+}
+
+/* ═══════════════════════════════════════
+   AUDIO TOGGLE BUTTON
+   ═══════════════════════════════════════ */
+
+.audio-toggle-btn {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(196, 167, 71, 0.4);
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  color: #c4a747;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.audio-toggle-btn:hover {
+  background: rgba(196, 167, 71, 0.15);
+  border-color: rgba(196, 167, 71, 0.7);
+  box-shadow: 0 0 12px rgba(196, 167, 71, 0.2);
+}
+
+.audio-toggle-btn:active {
+  transform: scale(0.92);
 }
 
 /* ========================================
