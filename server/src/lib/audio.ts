@@ -159,7 +159,7 @@ export function getNarratorVoice(
 const TONE_TO_TAGS: Record<string, string[]> = {
   dark: ["dark", "melancholic"],
   heroic: ["energetic", "uplifting"],
-  mysterious: ["ethereal", "dreamy"],
+  mysterious: ["ethereal", "mysterious"],
   hopeful: ["uplifting", "warm"],
   tense: ["dark", "atmospheric"],
   somber: ["melancholic", "atmospheric"],
@@ -167,7 +167,7 @@ const TONE_TO_TAGS: Record<string, string[]> = {
   romantic: ["romantic", "passionate"],
   playful: ["playful", "energetic"],
   epic: ["energetic", "passionate"],
-  whimsical: ["playful", "dreamy"],
+  whimsical: ["playful", "quirky"],
   melancholic: ["melancholic", "ethereal"],
   warm: ["warm", "romantic"],
 };
