@@ -236,6 +236,16 @@ function getI18n(lang: string): I18nStrings {
   return I18N[lang] || I18N.en;
 }
 
+const LANG_NAMES: Record<string, string> = {
+  fr: "French", en: "English", de: "German", es: "Spanish", pt: "Portuguese",
+};
+
+/** Append a mandatory language reminder to every LLM message */
+function withLang(msg: string, lang: string): string {
+  const name = LANG_NAMES[lang] || lang;
+  return `${msg}\n[LANGUAGE] You MUST respond ONLY in ${name}. Not a single word in another language.`;
+}
+
 type Screen = "title" | "intro" | "game" | "puzzle" | "death" | "end";
 
 interface GameState {
@@ -442,9 +452,11 @@ function QuestForgeGame() {
     }
   }, [isMuted]);
 
-  // Play initial audio from gameData
+  // Play initial audio from gameData — only once (scene 1 entry)
+  const initialAudioPlayed = useRef(false);
   useEffect(() => {
-    if (gameData && gameState._initialized && gameState.screen === "game") {
+    if (gameData && gameState._initialized && gameState.screen === "game" && !initialAudioPlayed.current) {
+      initialAudioPlayed.current = true;
       if (gameData.narrationAudioUrl) {
         playAudio(gameData.narrationAudioUrl, narrationAudioRef, { loop: false, volume: 0.9 });
       }
@@ -452,7 +464,6 @@ function QuestForgeGame() {
         playAudio(gameData.musicAudioUrl, musicAudioRef, { loop: true, volume: 0.3 });
       }
     }
-    // Only trigger on first game screen entry
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState.screen === "game" && gameState._initialized]);
 
@@ -558,24 +569,27 @@ function QuestForgeGame() {
 
         // Send puzzle or normal message
         if (scene.puzzle) {
-          sendFollowUpMessage(
+          sendFollowUpMessage(withLang(
             `[PUZZLE MODE] ${speakingNpcName} presents the challenge "${scene.puzzle.title}" to the player.\n` +
             `Context: ${scene.puzzle.description}\n` +
             `You do NOT know the answer. You ONLY have these hints to give ONE BY ONE:\n` +
             scene.puzzle.hints.map((h: string, i: number) => `  ${i + 1}. ${h}`).join("\n") + "\n" +
-            `RULES: ALWAYS refuse to give the answer. ONE hint per message. 2-3 lines MAX. Stay in character.`
-          );
+            `RULES: ALWAYS refuse to give the answer. ONE hint per message. 2-3 lines MAX. Stay in character.`,
+            gameData.language,
+          ));
         } else if (!isEnding) {
-          sendFollowUpMessage(
+          sendFollowUpMessage(withLang(
             `[Scene ${scene.sequenceNumber}] The player enters the scene.\n` +
-            `Respond as ${speakingNpcName} to this new situation.`
-          );
+            `Respond as ${speakingNpcName} to this new situation.`,
+            gameData.language,
+          ));
         }
       } catch (error) {
         console.error("Failed to generate scene:", error);
-        sendFollowUpMessage(
-          `[Error] Failed to generate the next scene. The player can retry their choice.`
-        );
+        sendFollowUpMessage(withLang(
+          `[Error] Failed to generate the next scene. The player can retry their choice.`,
+          gameData.language,
+        ));
       }
     },
     [gameData, isGeneratingScene, callToolAsync, gameState, sendFollowUpMessage, setGameState, playAudio, playSfx]
@@ -594,10 +608,11 @@ function QuestForgeGame() {
     // Send initial scene context to LLM
     if (gameData) {
       const npcName = gameData.speakingNpcName ?? "the NPC";
-      sendFollowUpMessage(
+      sendFollowUpMessage(withLang(
         `[Scene 1] The player enters the scene.\n` +
-        `Respond as ${npcName} to this new situation.`
-      );
+        `Respond as ${npcName} to this new situation.`,
+        gameData.language,
+      ));
     }
   }, [transitionTo, gameData, sendFollowUpMessage]);
 
@@ -619,18 +634,20 @@ function QuestForgeGame() {
 
         if (puzzleResult === "success") {
           playSfx("success");
-          sendFollowUpMessage(
-            `[PUZZLE SOLVED] The player solved the challenge "${puzzle.title}". Congratulate them briefly in 1-2 lines as ${gameState.speakingNpcName}.`
-          );
+          sendFollowUpMessage(withLang(
+            `[PUZZLE SOLVED] The player solved the challenge "${puzzle.title}". Congratulate them briefly in 1-2 lines as ${gameState.speakingNpcName}.`,
+            gameData.language,
+          ));
           setGameState((prev) => ({ ...prev, screen: "game" }));
         } else if (puzzleResult === "failure") {
           playSfx("failure");
           if (consequence === "death") {
             setGameState((prev) => ({ ...prev, screen: "death" }));
           } else {
-            sendFollowUpMessage(
-              `[PUZZLE FAILED] The player failed the challenge. Express your disappointment in 1-2 lines as ${gameState.speakingNpcName}.`
-            );
+            sendFollowUpMessage(withLang(
+              `[PUZZLE FAILED] The player failed the challenge. Express your disappointment in 1-2 lines as ${gameState.speakingNpcName}.`,
+              gameData.language,
+            ));
             setGameState((prev) => ({
               ...prev,
               screen: "game",
@@ -1467,11 +1484,12 @@ function EndScreen({
 
   useEffect(() => {
     const npcName = gameState.speakingNpcName || "the narrator";
-    sendFollowUpMessage(
+    sendFollowUpMessage(withLang(
       `The story "${gameData.title}" has ended after ${gameState.sceneCount} scenes. ` +
-      `Give a narrative conclusion as ${npcName}.`
-    );
-  }, [gameData.title, gameState.sceneCount, gameState.speakingNpcName, sendFollowUpMessage]);
+      `Give a narrative conclusion as ${npcName}.`,
+      gameData.language,
+    ));
+  }, [gameData.title, gameData.language, gameState.sceneCount, gameState.speakingNpcName, sendFollowUpMessage]);
 
   return (
     <div
