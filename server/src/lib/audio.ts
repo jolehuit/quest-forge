@@ -100,15 +100,13 @@ export async function generateTTS(
 // ═══════════════════════════════════════════════════════════
 
 async function generateMusic(
-  prompt: string,
   tags: string[],
 ): Promise<string | null> {
   try {
     const result = await fal.subscribe("sonauto/v2/text-to-music", {
       input: {
-        prompt,
         tags,
-        lyrics_prompt: "", // instrumental only
+        lyrics_prompt: "", // empty = instrumental only
         output_format: "mp3",
         output_bit_rate: "128",
         num_songs: 1,
@@ -126,8 +124,9 @@ async function generateMusic(
     }
 
     return audioUrl;
-  } catch (error) {
-    console.error("Failed to generate music:", error);
+  } catch (error: unknown) {
+    const body = (error as { body?: unknown })?.body;
+    console.error("Failed to generate music:", error, body ? JSON.stringify(body) : "");
     return null;
   }
 }
@@ -165,25 +164,22 @@ export async function generateMusicTracks(
   const moods = [
     {
       key: "ambient",
-      prompt: `${tone} ${genre} instrumental background music. Atmospheric, immersive, calm. Loop-friendly.`,
-      tags: [genre, "ambient", "atmospheric", "instrumental", "calm"],
+      tags: [genre, tone, "ambient", "atmospheric", "instrumental", "calm"],
     },
     {
       key: "tension",
-      prompt: `Dark ${genre} instrumental music. Tense, ominous, suspenseful. Loop-friendly.`,
-      tags: [genre, "dark", "tense", "suspenseful", "instrumental"],
+      tags: [genre, "dark", "tense", "suspenseful", "instrumental", "ominous"],
     },
     {
       key: "emotional",
-      prompt: `${tone} ${genre} instrumental music. Hopeful, warm, emotional. Loop-friendly.`,
-      tags: [genre, "emotional", "hopeful", "warm", "instrumental"],
+      tags: [genre, tone, "emotional", "hopeful", "warm", "instrumental"],
     },
   ];
 
   // Sequential to avoid hitting Fal concurrency limits
   // (portraits already use parallel Fal calls)
   for (const m of moods) {
-    const url = await generateMusic(m.prompt, m.tags);
+    const url = await generateMusic(m.tags);
     if (url) tracks.set(m.key, url);
   }
 
