@@ -15,6 +15,7 @@
     "inspector": "mcp-inspector http://localhost:3000/mcp"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.985.0",
     "@fal-ai/client": "^1.9.0",
     "@modelcontextprotocol/sdk": "^1.20.0",
     "@t3-oss/env-core": "^0.13.8",

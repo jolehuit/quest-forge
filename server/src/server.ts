@@ -436,8 +436,13 @@ function generateExits(
 // SERVER REGISTRATION
 // ═══════════════════════════════════════════════════════════
 
+const r2PublicUrl = process.env.R2_PUBLIC_URL?.replace(/\/$/, "");
 const SHARED_CSP = {
-  resourceDomains: ["https://fal.media", "https://*.fal.media"],
+  resourceDomains: [
+    "https://fal.media",
+    "https://*.fal.media",
+    ...(r2PublicUrl ? [r2PublicUrl] : []),
+  ],
 };
 
 const server = new McpServer({ name: "quest-forge", version: "0.1.0" }, { capabilities: {} })
@@ -559,9 +564,9 @@ const server = new McpServer({ name: "quest-forge", version: "0.1.0" }, { capabi
 
         // Generate TTS narration for the initial scene
         const voiceId = getNarratorVoice(input.language);
-        const narrationAudioBase64 = await generateTTS(initialScene.narration.text, voiceId);
+        const narrationAudioUrl = await generateTTS(initialScene.narration.text, voiceId);
         const musicTrackKey = getMusicTrackForMood(initialScene.narration.mood);
-        const musicAudioBase64 = musicTracks.get(musicTrackKey) ?? musicTracks.values().next().value ?? null;
+        const musicAudioUrl = musicTracks.get(musicTrackKey) ?? musicTracks.values().next().value ?? null;
 
         // Build game data for widget
         const gameData = {
@@ -590,8 +595,8 @@ const server = new McpServer({ name: "quest-forge", version: "0.1.0" }, { capabi
           })),
           currentScene: initialScene,
           introNarration: input.introNarration,
-          narrationAudioBase64,
-          musicAudioBase64,
+          narrationAudioUrl,
+          musicAudioUrl,
         };
 
         // Build system prompt focused on ONE NPC
@@ -759,9 +764,9 @@ const server = new McpServer({ name: "quest-forge", version: "0.1.0" }, { capabi
 
         // Generate TTS narration for the new scene
         const voiceId = getNarratorVoice(game.language);
-        const narrationAudioBase64 = await generateTTS(newScene.narration.text, voiceId);
+        const narrationAudioUrl = await generateTTS(newScene.narration.text, voiceId);
         const musicTrackKey = getMusicTrackForMood(newScene.narration.mood);
-        const musicAudioBase64 = game.musicTracks.get(musicTrackKey) ?? game.musicTracks.values().next().value ?? null;
+        const musicAudioUrl = game.musicTracks.get(musicTrackKey) ?? game.musicTracks.values().next().value ?? null;
 
         // Find the speaking NPC details
         const speakingNpc = game.story.npcs.find(n => n.id === nextSceneData.speakingNPCId);
@@ -800,8 +805,8 @@ INTERDICTIONS (violation = échec du jeu):
         return {
           structuredContent: {
             scene: newScene,
-            narrationAudioBase64,
-            musicAudioBase64,
+            narrationAudioUrl,
+            musicAudioUrl,
             speakingNpcId: nextSceneData.speakingNPCId,
             speakingNpcName,
             sceneCount: newSceneCount,

@@ -1,7 +1,57 @@
 /**
  * Audio generation utilities — TTS via Gradium, music via ElevenLabs
- * Both are optional: functions return null if API keys are missing or on error.
+ * Audio files are uploaded to Cloudflare R2 and served via public URL.
+ * Both are optional: functions return null if API keys or R2 config are missing.
  */
+
+import crypto from "node:crypto";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+
+// ═══════════════════════════════════════════════════════════
+// R2 client (lazy init — only created if env vars are set)
+// ═══════════════════════════════════════════════════════════
+
+let r2Client: S3Client | null = null;
+
+function getR2(): { client: S3Client; bucket: string; publicUrl: string } | null {
+  const accountId = process.env.R2_ACCOUNT_ID;
+  const accessKeyId = process.env.R2_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
+  const bucket = process.env.R2_BUCKET_NAME;
+  const publicUrl = process.env.R2_PUBLIC_URL;
+
+  if (!accountId || !accessKeyId || !secretAccessKey || !bucket || !publicUrl) return null;
+
+  if (!r2Client) {
+    r2Client = new S3Client({
+      region: "auto",
+      endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+      credentials: { accessKeyId, secretAccessKey },
+      requestChecksumCalculation: "WHEN_REQUIRED",
+      responseChecksumValidation: "WHEN_REQUIRED",
+    });
+  }
+
+  return { client: r2Client, bucket, publicUrl: publicUrl.replace(/\/$/, "") };
+}
+
+async function uploadToR2(buffer: Buffer, key: string, contentType: string): Promise<string | null> {
+  const r2 = getR2();
+  if (!r2) return null;
+
+  try {
+    await r2.client.send(new PutObjectCommand({
+      Bucket: r2.bucket,
+      Key: key,
+      Body: buffer,
+      ContentType: contentType,
+    }));
+    return `${r2.publicUrl}/${key}`;
+  } catch (error) {
+    console.error("R2 upload failed:", error);
+    return null;
+  }
+}
 
 // ═══════════════════════════════════════════════════════════
 // TTS — Gradium API
@@ -35,7 +85,8 @@ export async function generateTTS(
     }
 
     const buffer = Buffer.from(await response.arrayBuffer());
-    return buffer.toString("base64");
+    const key = `audio/tts-${crypto.randomUUID()}.opus`;
+    return await uploadToR2(buffer, key, "audio/ogg; codecs=opus");
   } catch (error) {
     console.error("Failed to generate TTS:", error);
     return null;
@@ -43,7 +94,7 @@ export async function generateTTS(
 }
 
 // ═══════════════════════════════════════════════════════════
-// Music — ElevenLabs API
+// Music — ElevenLabs API (max 3 concurrent)
 // ═══════════════════════════════════════════════════════════
 
 export async function generateMusic(
@@ -77,7 +128,8 @@ export async function generateMusic(
     }
 
     const buffer = Buffer.from(await response.arrayBuffer());
-    return buffer.toString("base64");
+    const key = `audio/music-${crypto.randomUUID()}.mp3`;
+    return await uploadToR2(buffer, key, "audio/mpeg");
   } catch (error) {
     console.error("Failed to generate music:", error);
     return null;
@@ -104,7 +156,7 @@ export function getNarratorVoice(
 }
 
 // ═══════════════════════════════════════════════════════════
-// Music track generation
+// Music track generation (3 tracks = ElevenLabs concurrency limit)
 // ═══════════════════════════════════════════════════════════
 
 export async function generateMusicTracks(
